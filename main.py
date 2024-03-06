@@ -4,6 +4,7 @@ import json
 from dotenv import load_dotenv
 import discord
 from discord.ext import commands
+from discord import app_commands
 
 load_dotenv('.env')
 
@@ -43,19 +44,24 @@ class Bot(commands.Bot):
             return
         current_count += 1
         await message.add_reaction(':white_check_mark:')
+    
+    async def setup_hook(self) -> None:
+        await self.tree.sync()
 
 bot = Bot()
 
 
-@bot.command()
+@bot.tree.command(name='setchannel', description='Sets the channel to count in')
+@app_commands.describe(channel='The channel to count in')
 @commands.has_permissions(ban_members=True)
-async def set_channel(ctx: commands.Context, channel_id:int):
+async def set_channel(ctx: commands.Context, channel:discord.TextChannel):
     if not isinstance(channel_id, int):
         await ctx.send('Channel ID must be an integer')
         return
     with open('config.json', 'w') as f:
         json.dump({'channel_id': channel_id}, f)
     channel: discord.TextChannel = await bot.fetch_channel(channel_id)
+    await ctx.send(f'Counting channel was set to {channel.mention}')
     
 
 
