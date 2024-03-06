@@ -26,15 +26,17 @@ class Bot(commands.Bot):
     async def on_message(self, message: discord.Message) -> None:
         global current_count
         if message.author == self.user:
+            print('Did not add reaction to yourself!')
             return
         if channel_id is None:
+            print('No channel')
             return
         if message.channel.id != channel_id:
             return
         content: str = message.content.split()[0]
         if not content.isdigit():
             return
-        if int(content) != int(content)+1:
+        if int(content) != int(current_count)+1:
             await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {int(content)+1}\nRestart by 0.')
             current_count = 0
             return
