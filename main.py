@@ -64,14 +64,14 @@ async def sync(ctx: commands.Context):
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 @commands.has_permissions(ban_members=True)
-async def set_channel(ctx: commands.Context, channel:discord.TextChannel):
+async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
     if not isinstance(channel_id, int):
-        await ctx.send('Channel ID must be an integer')
+        await interaction.response.send_message('Channel ID must be an integer')
         return
     with open('config.json', 'w') as f:
         json.dump({'channel_id': channel_id}, f)
     channel: discord.TextChannel = await bot.fetch_channel(channel_id)
-    await ctx.send(f'Counting channel was set to {channel.mention}')
+    await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
     
 
 
