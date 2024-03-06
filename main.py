@@ -54,6 +54,13 @@ class Bot(commands.Bot):
 bot = Bot()
 
 
+@bot.command()
+@bot.is_owner()
+async def sync(ctx: commands.Context):
+    await bot.tree.sync()
+    await ctx.send('Synced!')
+
+
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 @commands.has_permissions(ban_members=True)
