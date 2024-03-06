@@ -43,7 +43,10 @@ class Bot(commands.Bot):
             current_count = 0
             return
         current_count += 1
-        await message.add_reaction(':white_check_mark:')
+        if current_count == 100:
+            await message.add_reaction(':100:')
+        else:
+            await message.add_reaction(':white_check_mark:')
     
     async def setup_hook(self) -> None:
         await self.tree.sync()
