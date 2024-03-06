@@ -55,7 +55,7 @@ bot = Bot()
 
 
 @bot.command()
-@bot.is_owner()
+@commands.has_permissions(ban_members=True)
 async def sync(ctx: commands.Context):
     await bot.tree.sync()
     await ctx.send('Synced!')
