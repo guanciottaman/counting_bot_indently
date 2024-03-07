@@ -93,15 +93,13 @@ class Bot(commands.Bot):
         # Wrong number
         if int(number) != int(config.current_count)+1:
             await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {int(number)+1}\nRestart by 1.')
-            current_count = 0
             await message.add_reaction('❌')
             config.reset(message.author.id)
             return
 
         # Wrong member
-        if current_count and config.current_member_id == message.author.id:
+        if config.current_count and config.current_member_id == message.author.id:
             await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 1.')
-            current_count = 0
             await message.add_reaction('❌')
             config.reset(message.author.id)
             return
