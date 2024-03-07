@@ -1,5 +1,8 @@
 import os
 import json
+from ast import literal_eval
+from dataclasses import dataclass
+from typing import Optional
 
 from dotenv import load_dotenv
 import discord
@@ -9,10 +12,54 @@ from discord import app_commands
 load_dotenv('.env')
 
 TOKEN: str = os.getenv('TOKEN')
-with open('config.json', 'r') as f:
-    channel_id = json.load(f)['channel_id']
-current_count: int = 0
-current_member: discord.Member = None
+
+@dataclass
+class Config:
+    channel_id: Optional[int]
+    current_count: int
+    high_score: int
+    current_member_id: Optional[int]
+
+    def read():
+        with open("config.json", "r") as file:
+            config = Config(**json.load(file))
+        return config
+
+    def update(self) -> None:
+        with open("config.json", "w") as file:
+            json.dump(self.__dict__, file, indent=2)
+
+    def increment(self, member_id: int):
+        # increment current count
+        self.current_count += 1
+
+        # update current member id
+        self.current_member_id = member_id
+
+        # check the high score
+        if self.current_count > self.high_score:
+            self.high_score = self.current_count
+
+        self.update()
+
+    def reset(self, member_id: int):
+        # reset current count
+        self.current_count = -1
+
+        # update current member id
+        self.current_member_id = member_id
+
+        self.update()
+
+    def reaction_emoji(self):
+        if self.current_count > self.high_score:
+            emoji = "🎉"
+        elif self.current_count == 100:
+            emoji = "💯"
+        else:
+            emoji = "✅"
+
+        return emoji
 
 class Bot(commands.Bot):
     def __init__(self):
@@ -24,31 +71,45 @@ class Bot(commands.Bot):
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
     
     async def on_message(self, message: discord.Message) -> None:
-        global current_count
+        if not self.is_ready():
+            return
+
         if message.author == self.user:
             print('Did not add reaction to yourself!')
             return
-        if channel_id is None:
-            print('No channel')
+
+        config = Config.read()
+
+        # Check if the message is in the channel
+        if message.channel.id != config.channel_id:
             return
-        if message.channel.id != channel_id:
-            return
+
         content: str = message.content.split()[0]
         if not content.isdigit():
             return
-        if int(content) != int(current_count)+1:
-            await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {int(content)+1}\nRestart by 0.')
+
+        number: int = literal_eval(content)
+
+        # Wrong number
+        if int(number) != int(config.current_count)+1:
+            await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {int(number)+1}\nRestart by 1.')
             current_count = 0
+            await message.add_reaction('❌')
+            config.reset(message.author.id)
             return
-        if current_count and current_member == message.author:
-            await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 0.')
+
+        # Wrong member
+        if current_count and config.current_member_id == message.author.id:
+            await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 1.')
             current_count = 0
+            await message.add_reaction('❌')
+            config.reset(message.author.id)
             return
-        current_count += 1
-        if current_count == 100:
-            await message.add_reaction('100')
-        else:
-            await message.add_reaction('white_check_mark')
+        
+        # Everything is fine
+        config.increment(message.author.id)
+        await message.add_reaction(config.reaction_emoji())
+        
     
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -65,10 +126,13 @@ async def sync(ctx: commands.Context):
 
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
-@commands.has_permissions(ban_members=True)
 async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
-    with open('config.json', 'w') as f:
-        json.dump({'channel_id': channel.id}, f)
+    if discord.Permissions.ban_members not in interaction.user.guild_permissions:
+        await interaction.response.send_message('You do not have permission to do this!')
+        return
+    config = Config.read()
+    config.channel_id = channel.id
+    config.update()
     await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
     
 
