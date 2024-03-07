@@ -20,6 +20,7 @@ class Config:
     current_count: int
     high_score: int
     current_member_id: Optional[int]
+    put_high_score_emoji: bool
 
     def read():
         with open("config.json", "r") as file:
@@ -53,8 +54,9 @@ class Config:
         self.update()
 
     def reaction_emoji(self):
-        if self.current_count > self.high_score:
+        if self.current_count == self.high_score and not self.put_high_score_emoji:
             emoji = "🎉"
+            self.put_high_score_emoji = True
         elif self.current_count == 100:
             emoji = "💯"
         elif self.current_count == 69:
@@ -172,6 +174,7 @@ extensions = [
 
 
 @bot.tree.command()
+@app_commands.checks.has_permissions(administrator=True)
 async def sync(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
