@@ -42,12 +42,12 @@ class Config:
 
         self.update()
 
-    def reset(self, member_id: int):
+    def reset(self):
         # reset current count
         self.current_count = -1
 
         # update current member id
-        self.current_member_id = member_id
+        self.current_member_id = None
 
         self.update()
 
@@ -107,13 +107,13 @@ class Bot(commands.Bot):
         config: Config = Config.read()
         await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by 1.')
         await message.add_reaction('❌')
-        config.reset(message.author.id)
+        config.reset()
 
     async def handle_wrong_member(self, message: discord.Message) -> None:
         config: Config = Config.read()
         await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 1.')
         await message.add_reaction('❌')
-        config.reset(message.author.id)
+        config.reset()
         
     
     async def setup_hook(self) -> None:
@@ -132,7 +132,7 @@ async def sync(ctx: commands.Context):
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
-    if interaction.user.guild_permissions.ban_members:
+    if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
         return
     config = Config.read()
