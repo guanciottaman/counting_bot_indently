@@ -75,7 +75,6 @@ class Bot(commands.Bot):
             return
 
         if message.author == self.user:
-            print('Did not add reaction to yourself!')
             return
 
         config = Config.read()
@@ -133,7 +132,7 @@ async def sync(ctx: commands.Context):
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
-    if discord.Permissions.ban_members not in interaction.user.guild_permissions:
+    if interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
         return
     config = Config.read()
