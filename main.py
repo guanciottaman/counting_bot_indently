@@ -92,21 +92,29 @@ class Bot(commands.Bot):
 
         # Wrong number
         if int(number) != int(config.current_count)+1:
-            await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {int(number)+1}\nRestart by 1.')
-            await message.add_reaction('❌')
-            config.reset(message.author.id)
+            await self.handle_wrong_count(message)
             return
 
         # Wrong member
         if config.current_count and config.current_member_id == message.author.id:
-            await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 1.')
-            await message.add_reaction('❌')
-            config.reset(message.author.id)
+            await self.handle_wrong_member(message)
             return
         
         # Everything is fine
         config.increment(message.author.id)
         await message.add_reaction(config.reaction_emoji())
+
+    async def handle_wrong_count(self, message: discord.Message) -> None:
+        config: Config = Config.read()
+        await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by 1.')
+        await message.add_reaction('❌')
+        config.reset(message.author.id)
+
+    async def handle_wrong_member(self, message: discord.Message) -> None:
+        config: Config = Config.read()
+        await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 1.')
+        await message.add_reaction('❌')
+        config.reset(message.author.id)
         
     
     async def setup_hook(self) -> None:
