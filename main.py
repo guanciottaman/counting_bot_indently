@@ -135,13 +135,13 @@ class Bot(commands.Bot):
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         config: Config = Config.read()
-        await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by 1 and try to beat the current high score of {config.high_score}!')
+        await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
         await message.add_reaction('❌')
         config.reset()
 
     async def handle_wrong_member(self, message: discord.Message) -> None:
         config: Config = Config.read()
-        await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by 1 and try to beat the current high score of {config.high_score}!')
+        await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
         await message.add_reaction('❌')
         config.reset()
     
