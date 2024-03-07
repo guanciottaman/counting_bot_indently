@@ -50,6 +50,7 @@ class Config:
 
         # update current member id
         self.current_member_id = None
+        self.put_high_score_emoji = False
 
         self.update()
 
@@ -136,6 +137,34 @@ class Bot(commands.Bot):
         conn.close()
         await message.add_reaction(config.reaction_emoji())
 
+    async def on_message_delete(self, message: discord.Message) -> None:
+        if not self.is_ready():
+            return
+
+        if message.author == self.user:
+            return
+
+        config = Config.read()
+
+        # Check if the message is in the channel
+        if message.channel.id != config.channel_id:
+            return
+        await message.channel.send(f'{message.author.mention} deleted his number! The current number is **{config.current_count}**.')
+    
+    async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
+        if not self.is_ready():
+            return
+
+        if before.author == self.user:
+            return
+
+        config = Config.read()
+
+        # Check if the message is in the channel
+        if before.channel.id != config.channel_id:
+            return
+        await after.channel.send(f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
+
     async def handle_wrong_count(self, message: discord.Message) -> None:
         config: Config = Config.read()
         await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
@@ -180,8 +209,9 @@ async def sync(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
         return
+    await interaction.response.defer()
     await bot.tree.sync()
-    await interaction.response.send_message('Synced!')
+    await interaction.followup.send('Synced!')
 
 
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
@@ -195,6 +225,9 @@ async def set_channel(interaction: discord.Interaction, channel:discord.TextChan
     config.update()
     await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
     
+@bot.tree.command(name='listcmds', description='Lists commands')
+async def list_commands(interaction: discord.Interaction):
+    await interaction.response.send_message(bot.all_commands)
 
 
 if __name__ == '__main__':
