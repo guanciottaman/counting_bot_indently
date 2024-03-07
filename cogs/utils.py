@@ -26,7 +26,7 @@ class Utils(commands.Cog):
         c.execute('SELECT member_id FROM members ORDER BY score DESC')
         leaderboard = c.fetchall()
         position = leaderboard.index(member.id) + 1
-        emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[0]} (#{position})\n**✅Correct:** {stats[1]}\n**❌Wrong:** {stats[2]}\n**Highest valid count:** {stats[3]}\n\n'
+        emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[0]} (#{position})\n**✅Correct:** {stats[1]}\n**❌Wrong:** {stats[2]}\n**Highest valid count:** {stats[3]}\n\n**Correct rate:** {stats[1]/stats[0]*100:.2f}%'
         await interaction.response.send_message(embed=emb)
         conn.close()
 

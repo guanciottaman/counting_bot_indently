@@ -57,6 +57,7 @@ class Config:
         if self.current_count == self.high_score+1 and not self.put_high_score_emoji:
             emoji = "🎉"
             self.put_high_score_emoji = True
+            self.update()
         elif self.current_count == 100:
             emoji = "💯"
         elif self.current_count == 69:
@@ -173,7 +174,7 @@ extensions = [
 ]
 
 
-@bot.tree.command()
+@bot.tree.command(name='sync', description='Syncs the slash commands to the bot')
 @app_commands.checks.has_permissions(administrator=True)
 async def sync(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.ban_members:
