@@ -108,6 +108,7 @@ class Bot(commands.Bot):
             wrong = 0
             highest_valid_count = 0
             c.execute('INSERT INTO members VALUES(?, ?, ?, ?, ?)', (message.author.id, score, correct, wrong, highest_valid_count))
+            conn.commit()
         else:
             score = stats[0]
             correct = stats[1]
@@ -118,6 +119,7 @@ class Bot(commands.Bot):
         if int(number) != int(config.current_count)+1:
             await self.handle_wrong_count(message)
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?', (message.author.id,))
+            conn.commit()
             conn.close()
             return
 
@@ -125,6 +127,7 @@ class Bot(commands.Bot):
         if config.current_count and config.current_member_id == message.author.id:
             await self.handle_wrong_member(message)
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?', (message.author.id,))
+            conn.commit()
             conn.close()
             return
         
@@ -134,6 +137,7 @@ class Bot(commands.Bot):
             highest_valid_count = config.current_count
         c.execute('UPDATE members SET score = score + 1, correct = correct + 1, highest_valid_count = ? WHERE member_id = ?',
                   (highest_valid_count, message.author.id))
+        conn.commit()
         conn.close()
         await message.add_reaction(config.reaction_emoji())
 
@@ -232,12 +236,12 @@ async def set_channel(interaction: discord.Interaction, channel:discord.TextChan
     
 @bot.tree.command(name='listcmds', description='Lists commands')
 async def list_commands(interaction: discord.Interaction):
-    await interaction.response.send_message(bot.all_commands)
+    await interaction.response.send_message(bot.commands)
 
 
 @bot.tree.command(name='userstats', description='Shows the user stats')
 @app_commands.describe(member='The member to get the stats for')
-async def user_stats(self, interaction:discord.Interaction, member: discord.Member = None):
+async def user_stats(interaction:discord.Interaction, member: discord.Member = None):
     if member is None:
         member = interaction.user
     emb = discord.Embed(title=f'{member.global_name}\'s stats', color=discord.Color.blue())
@@ -245,16 +249,38 @@ async def user_stats(self, interaction:discord.Interaction, member: discord.Memb
     c = conn.cursor()
     c.execute('SELECT * FROM members WHERE member_id = ?', (member.id,))
     stats = c.fetchone()
+    print(stats)
     if stats is None:
         await interaction.response.send_message('You have never counted in this server!')
         conn.close()
         return
     c.execute('SELECT member_id FROM members ORDER BY score DESC')
-    leaderboard = c.fetchall()
-    position = leaderboard.index(member.id) + 1
-    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[0]} (#{position})\n**✅Correct:** {stats[1]}\n**❌Wrong:** {stats[2]}\n**Highest valid count:** {stats[3]}\n\n**Correct rate:** {stats[1]/stats[0]*100:.2f}%'
+    #leaderboard = c.fetchone()
+    #print(leaderboard)
+    #position = leaderboard.index(member.id) + 1
+    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]}\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
     await interaction.response.send_message(embed=emb)
     conn.close()
+
+@bot.tree.command(name="server_stats", description="View server counting stats")
+@app_commands.describe()
+async def server_stats(interaction: discord.Interaction):
+
+    config = Config.read()
+
+    # channel not seted yet
+    if config.channel_id is None:
+        await interaction.response.send_message("counting channel not setted yet!")
+        return
+
+
+    server_stats_embed = discord.Embed(
+        description=f'**Current Count**: {config.current_count}\nHigh Score: {config.high_score}\n{f"Last counted by: <@{config.current_member_id}>" if config.current_member_id else ""}',
+        color=discord.Color.blurple()
+    )
+    server_stats_embed.set_author(name=interaction.guild, icon_url=interaction.guild.icon)
+
+    await interaction.response.send_message(embed=server_stats_embed)
 
 
 if __name__ == '__main__':
