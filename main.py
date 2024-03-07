@@ -183,7 +183,7 @@ class Bot(commands.Bot):
             return
         
         if user != self.user:
-            await reaction.message.channel.send(f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!')
+            await reaction.message.channel.send(f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!', suppress_embeds=True)
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         config: Config = Config.read()
@@ -195,17 +195,7 @@ class Bot(commands.Bot):
         config: Config = Config.read()
         await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
         await message.add_reaction('❌')
-        config.reset()
-    
-    async def load_extensions(self) -> None:
-        for extension in extensions:
-            try:
-                await bot.load_extension(extension)
-                print(f'Loaded extension {extension}')
-            except Exception as e:
-                print(f'Failed to load extension {extension}')
-                print(e)
-        
+        config.reset()  
     
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -214,13 +204,8 @@ class Bot(commands.Bot):
         c.execute('CREATE TABLE IF NOT EXISTS members (member_id INTEGER PRIMARY KEY, score INTEGER, correct INTEGER, wrong INTEGER, highest_valid_count INTEGER)')
         conn.commit()
         conn.close()
-        await self.load_extensions()
 
 bot = Bot()
-
-extensions = [
-    'cogs.utils'
-]
 
 
 @bot.tree.command(name='sync', description='Syncs the slash commands to the bot')
@@ -248,6 +233,28 @@ async def set_channel(interaction: discord.Interaction, channel:discord.TextChan
 @bot.tree.command(name='listcmds', description='Lists commands')
 async def list_commands(interaction: discord.Interaction):
     await interaction.response.send_message(bot.all_commands)
+
+
+@bot.tree.command(name='userstats', description='Shows the user stats')
+@app_commands.describe(member='The member to get the stats for')
+async def user_stats(self, interaction:discord.Interaction, member: discord.Member = None):
+    if member is None:
+        member = interaction.user
+    emb = discord.Embed(title=f'{member.global_name}\'s stats', color=discord.Color.blue())
+    conn = sqlite3.connect('database.sqlite3')
+    c = conn.cursor()
+    c.execute('SELECT * FROM members WHERE member_id = ?', (member.id,))
+    stats = c.fetchone()
+    if stats is None:
+        await interaction.response.send_message('You have never counted in this server!')
+        conn.close()
+        return
+    c.execute('SELECT member_id FROM members ORDER BY score DESC')
+    leaderboard = c.fetchall()
+    position = leaderboard.index(member.id) + 1
+    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[0]} (#{position})\n**✅Correct:** {stats[1]}\n**❌Wrong:** {stats[2]}\n**Highest valid count:** {stats[3]}\n\n**Correct rate:** {stats[1]/stats[0]*100:.2f}%'
+    await interaction.response.send_message(embed=emb)
+    conn.close()
 
 
 if __name__ == '__main__':
