@@ -2,5 +2,6 @@
   "channel_id": 1215040718993756310,
   "current_count": 0,
   "high_score": 58,
-  "current_member_id": null
+  "current_member_id": null,
+  "put_high_score_emoji": false
 }
