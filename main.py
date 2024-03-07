@@ -168,6 +168,22 @@ class Bot(commands.Bot):
         if not before.reactions:
             return
         await after.channel.send(f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
+    
+    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
+        if not self.is_ready():
+            return
+
+        if reaction.message.author == self.user:
+            return
+
+        config = Config.read()
+
+        # Check if the message is in the channel
+        if reaction.message.channel.id != config.channel_id:
+            return
+        
+        if user != self.user:
+            await reaction.message.channel.send(f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!')
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         config: Config = Config.read()
