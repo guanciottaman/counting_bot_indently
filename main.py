@@ -54,7 +54,7 @@ class Config:
         self.update()
 
     def reaction_emoji(self):
-        if self.current_count == self.high_score+1 and not self.put_high_score_emoji:
+        if self.current_count == self.high_score and not self.put_high_score_emoji:
             emoji = "🎉"
             self.put_high_score_emoji = True
             self.update()
