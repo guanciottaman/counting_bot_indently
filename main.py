@@ -149,8 +149,7 @@ class Bot(commands.Bot):
         # Check if the message is in the channel
         if message.channel.id != config.channel_id:
             return
-        content: str = message.content.split()[0]
-        if not content.isdigit():
+        if not message.reactions:
             return
         await message.channel.send(f'{message.author.mention} deleted his number! The current number is **{config.current_count}**.')
     
@@ -166,8 +165,7 @@ class Bot(commands.Bot):
         # Check if the message is in the channel
         if before.channel.id != config.channel_id:
             return
-        content: str = before.content.split()[0]
-        if not content.isdigit():
+        if not before.reactions:
             return
         await after.channel.send(f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
 
