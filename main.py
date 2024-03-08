@@ -92,7 +92,7 @@ class Bot(commands.Bot):
         if message.channel.id != config.channel_id:
             return
 
-        content: str = message.content.split()[0]
+        content: str = message.content
         if not all(c in POSSIBLE_CHARACTERS for c in content):
             return
 
@@ -244,7 +244,11 @@ async def set_channel(interaction: discord.Interaction, channel:discord.TextChan
     
 @bot.tree.command(name='listcmds', description='Lists commands')
 async def list_commands(interaction: discord.Interaction):
-    await interaction.response.send_message(bot.commands)
+    emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(), description='')
+    for command in bot.tree.walk_commands():
+        print(command.name)
+        emb.description += f'\n**{command.name}** - {command.description}'
+    await interaction.response.send_message(embed=emb)
 
 
 @bot.tree.command(name='stats_user', description='Shows the user stats')
@@ -290,6 +294,21 @@ async def server_stats(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=server_stats_embed)
 
+
+@bot.tree.command(name='leaderboard', description='Shows the first 10 users with the highest score')
+async def leaderboard(interaction: discord.Interaction):
+    emb = discord.Embed(title='Top 10 users in Indently', color=discord.Color.blue(), description='')
+    conn = sqlite3.connect('database.sqlite3')
+    c = conn.cursor()
+    c.execute('SELECT member_id, score FROM members ORDER BY score DESC LIMIT 10')
+    users = c.fetchall()
+    for i, user in enumerate(users, 1):
+        print(user[0], user[1])
+        user_obj = await interaction.guild.fetch_member(user[0])
+        print(i, user_obj, user[1])
+        emb.description += f'{i}. {user_obj.mention} **{user[1]}**'
+    conn.close()
+    await interaction.response.send_message(embed=emb)
 
 if __name__ == '__main__':
     bot.run(TOKEN)
