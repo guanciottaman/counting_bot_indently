@@ -306,7 +306,7 @@ async def leaderboard(interaction: discord.Interaction):
         print(user[0], user[1])
         user_obj = await interaction.guild.fetch_member(user[0])
         print(i, user_obj, user[1])
-        emb.description += f'{i}. {user_obj.mention} **{user[1]}**'
+        emb.description += f'{i}. {user_obj.mention} **{user[1]}**\n'
     conn.close()
     await interaction.response.send_message(embed=emb)
 
