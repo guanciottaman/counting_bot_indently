@@ -266,12 +266,6 @@ async def stats_user(interaction:discord.Interaction, member: discord.Member = N
     score = c.fetchone()[0]
     c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {score}')
     position = c.fetchone()[0]
-<<<<<<< HEAD
-    #leaderboard = c.fetchone()
-    #print(leaderboard)
-    #position = leaderboard.index(member.id) + 1
-=======
->>>>>>> 262ba2e (Stats user is now working (thanks to Wrichik Basu for the pull request))
     emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]} (#{position})\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
     await interaction.response.send_message(embed=emb)
     conn.close()
