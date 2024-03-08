@@ -256,7 +256,7 @@ async def user_stats(interaction:discord.Interaction, member: discord.Member = N
         return
     c.execute(f'SELECT score FROM members WHERE member_id = {member.id}')
     score = c.fetchone()[0]
-    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score > {score}')
+    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {score}')
     position = c.fetchone()[0]
     #leaderboard = c.fetchone()
     #print(leaderboard)
