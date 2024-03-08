@@ -1,18 +1,20 @@
-import os
 import json
+import os
+import sqlite3
+import string
 from ast import literal_eval
 from dataclasses import dataclass
-import sqlite3
 from typing import Optional
 
-from dotenv import load_dotenv
 import discord
-from discord.ext import commands
 from discord import app_commands
+from discord.ext import commands
+from dotenv import load_dotenv
 
 load_dotenv('.env')
 
 TOKEN: str = os.getenv('TOKEN')
+POSSIBLE_CHARACTERS: str = string.digits + '+-*/^'
 
 @dataclass
 class Config:
@@ -95,7 +97,7 @@ class Bot(commands.Bot):
         if not content.isdigit():
             return
 
-        number: int = literal_eval(content)
+        number: int = round(literal_eval(content))
 
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
@@ -239,9 +241,9 @@ async def list_commands(interaction: discord.Interaction):
     await interaction.response.send_message(bot.commands)
 
 
-@bot.tree.command(name='userstats', description='Shows the user stats')
+@bot.tree.command(name='stats_user', description='Shows the user stats')
 @app_commands.describe(member='The member to get the stats for')
-async def user_stats(interaction:discord.Interaction, member: discord.Member = None):
+async def stats_user(interaction:discord.Interaction, member: discord.Member = None):
     if member is None:
         member = interaction.user
     emb = discord.Embed(title=f'{member.global_name}\'s stats', color=discord.Color.blue())
@@ -258,9 +260,12 @@ async def user_stats(interaction:discord.Interaction, member: discord.Member = N
     score = c.fetchone()[0]
     c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {score}')
     position = c.fetchone()[0]
+<<<<<<< HEAD
     #leaderboard = c.fetchone()
     #print(leaderboard)
     #position = leaderboard.index(member.id) + 1
+=======
+>>>>>>> 262ba2e (Stats user is now working (thanks to Wrichik Basu for the pull request))
     emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]} (#{position})\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
     await interaction.response.send_message(embed=emb)
     conn.close()
