@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv('.env')
 
 TOKEN: str = os.getenv('TOKEN')
-POSSIBLE_CHARACTERS: str = string.digits + '+-*/^.'
+POSSIBLE_CHARACTERS: str = string.digits + '+-*/. ()'
 
 @dataclass
 class Config:
