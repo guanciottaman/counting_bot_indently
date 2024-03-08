@@ -254,11 +254,14 @@ async def user_stats(interaction:discord.Interaction, member: discord.Member = N
         await interaction.response.send_message('You have never counted in this server!')
         conn.close()
         return
-    c.execute('SELECT member_id FROM members ORDER BY score DESC')
+    c.execute(f'SELECT score FROM members WHERE member_id = {member.id}')
+    score = c.fetchone()[0]
+    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score > {score}')
+    position = c.fetchone()[0]
     #leaderboard = c.fetchone()
     #print(leaderboard)
     #position = leaderboard.index(member.id) + 1
-    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]}\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
+    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]} (#{position})\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
     await interaction.response.send_message(embed=emb)
     conn.close()
 
