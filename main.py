@@ -2,7 +2,6 @@ import json
 import os
 import sqlite3
 import string
-from ast import literal_eval
 from dataclasses import dataclass
 from typing import Optional
 
@@ -14,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv('.env')
 
 TOKEN: str = os.getenv('TOKEN')
-POSSIBLE_CHARACTERS: str = string.digits + '+-*/^'
+POSSIBLE_CHARACTERS: str = string.digits + '+-*/^.'
 
 @dataclass
 class Config:
@@ -94,10 +93,10 @@ class Bot(commands.Bot):
             return
 
         content: str = message.content.split()[0]
-        if not content.isdigit():
+        if not all(c in POSSIBLE_CHARACTERS for c in content):
             return
 
-        number: int = round(literal_eval(content))
+        number: int = round(eval(content))
 
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
@@ -157,6 +156,8 @@ class Bot(commands.Bot):
             return
         if not message.reactions:
             return
+        if not all(c in POSSIBLE_CHARACTERS for c in message.content):
+            return
         await message.channel.send(f'{message.author.mention} deleted his number! The current number is **{config.current_count}**.')
     
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
@@ -173,6 +174,8 @@ class Bot(commands.Bot):
             return
         if not before.reactions:
             return
+        if not all(c in POSSIBLE_CHARACTERS for c in before.content):
+            return
         await after.channel.send(f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
     
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
@@ -186,6 +189,9 @@ class Bot(commands.Bot):
 
         # Check if the message is in the channel
         if reaction.message.channel.id != config.channel_id:
+            return
+        
+        if not all(c in POSSIBLE_CHARACTERS for c in reaction.message.content):
             return
         
         if user != self.user:
