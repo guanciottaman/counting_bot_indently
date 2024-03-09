@@ -221,7 +221,7 @@ bot = Bot()
 
 
 @bot.tree.command(name='sync', description='Syncs the slash commands to the bot')
-@app_commands.checks.has_permissions(administrator=True)
+@app_commands.checks.has_permissions(administrator=True, ban_members=True)
 async def sync(interaction: discord.Interaction):
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
@@ -233,6 +233,7 @@ async def sync(interaction: discord.Interaction):
 
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
+@app_commands.checks.has_permissions(ban_members=True)
 async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
@@ -247,7 +248,7 @@ async def list_commands(interaction: discord.Interaction):
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(), description='')
     for command in bot.tree.walk_commands():
         print(command.name)
-        emb.description += f'\n**{command.name}** - {command.description}'
+        emb.description += f'\n**{command.name}** - {command.description}{" (Admins only)" if command.checks else ""}'
     await interaction.response.send_message(embed=emb)
 
 
@@ -275,7 +276,6 @@ async def stats_user(interaction:discord.Interaction, member: discord.Member = N
     conn.close()
 
 @bot.tree.command(name="server_stats", description="View server counting stats")
-@app_commands.describe()
 async def server_stats(interaction: discord.Interaction):
 
     config = Config.read()
@@ -309,6 +309,12 @@ async def leaderboard(interaction: discord.Interaction):
         emb.description += f'{i}. {user_obj.mention} **{user[1]}**\n'
     conn.close()
     await interaction.response.send_message(embed=emb)
+
+@bot.tree.command(name='set_failed_role', description='Sets the role to be used when a user fails to count')
+@app_commands.describe(role='The role to be used when a user fails to count')
+@app_commands.checks.has_permissions(ban_members=True)
+async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
+    pass
 
 if __name__ == '__main__':
     bot.run(TOKEN)
