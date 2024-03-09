@@ -22,6 +22,9 @@ class Config:
     high_score: int
     current_member_id: Optional[int]
     put_high_score_emoji: bool
+    failed_role_id: Optional[int]
+    reliable_counter_role_id: Optional[int]
+    failed_member_id: Optional[int]
 
     def read():
         with open("config.json", "r") as file:
@@ -102,6 +105,7 @@ class Bot(commands.Bot):
         c = conn.cursor()
         c.execute('SELECT * FROM members WHERE member_id = ?', (message.author.id,))
         stats = c.fetchone()
+        print(stats)
         
         if stats is None:
             score = 0
@@ -115,6 +119,7 @@ class Bot(commands.Bot):
             correct = stats[1]
             wrong = stats[2]
             highest_valid_count = stats[3]
+        print(highest_valid_count)
 
         # Wrong number
         if int(number) != int(config.current_count)+1:
@@ -134,14 +139,21 @@ class Bot(commands.Bot):
         
         # Everything is fine
         config.increment(message.author.id)
+        print(f'{config.current_count}')
         if config.current_count > highest_valid_count:
             highest_valid_count = config.current_count
+        print(f'{highest_valid_count = }')
         c.execute('UPDATE members SET score = score + 1, correct = correct + 1, highest_valid_count = ? WHERE member_id = ?',
                   (highest_valid_count, message.author.id))
         conn.commit()
         conn.close()
         await message.add_reaction(config.reaction_emoji())
-
+        if config.reliable_counter_role_id is None:
+            return
+        reliable_counter_role = discord.utils.get(message.guild.roles, id=config.reliable_counter_role_id)
+        if score >= 100 and reliable_counter_role not in message.author.roles:
+            await message.author.add_roles(reliable_counter_role)
+        
     async def on_message_delete(self, message: discord.Message) -> None:
         if not self.is_ready():
             return
@@ -201,13 +213,29 @@ class Bot(commands.Bot):
         config: Config = Config.read()
         await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
         await message.add_reaction('❌')
+        if config.failed_role_id is None:
+            config.reset()
+            return
+        failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
+        if failed_role not in message.author.roles:
+            failed_member = await message.guild.fetch_member(config.current_member_id)
+            await failed_member.remove_roles(failed_role)
+            await message.author.add_roles(failed_role)
         config.reset()
 
     async def handle_wrong_member(self, message: discord.Message) -> None:
         config: Config = Config.read()
         await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
         await message.add_reaction('❌')
-        config.reset()  
+        if config.failed_role_id is None:
+            config.reset()
+            return
+        failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
+        if failed_role not in message.author.roles:
+            failed_member = await message.guild.fetch_member(config.current_member_id)
+            await failed_member.remove_roles(failed_role)
+            await message.author.add_roles(failed_role)
+        config.reset()
     
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -262,7 +290,6 @@ async def stats_user(interaction:discord.Interaction, member: discord.Member = N
     c = conn.cursor()
     c.execute('SELECT * FROM members WHERE member_id = ?', (member.id,))
     stats = c.fetchone()
-    print(stats)
     if stats is None:
         await interaction.response.send_message('You have never counted in this server!')
         conn.close()
@@ -303,9 +330,7 @@ async def leaderboard(interaction: discord.Interaction):
     c.execute('SELECT member_id, score FROM members ORDER BY score DESC LIMIT 10')
     users = c.fetchall()
     for i, user in enumerate(users, 1):
-        print(user[0], user[1])
         user_obj = await interaction.guild.fetch_member(user[0])
-        print(i, user_obj, user[1])
         emb.description += f'{i}. {user_obj.mention} **{user[1]}**\n'
     conn.close()
     await interaction.response.send_message(embed=emb)
@@ -314,7 +339,21 @@ async def leaderboard(interaction: discord.Interaction):
 @app_commands.describe(role='The role to be used when a user fails to count')
 @app_commands.checks.has_permissions(ban_members=True)
 async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
-    pass
+    config = Config.read()
+    config.failed_role_id = role.id
+    config.update()
+    await interaction.response.send_message(f'Failed role was set to {role.mention}')
+
+
+@bot.tree.command(name='set_reliable_role', description='Sets the role to be used when a user gets 100 of score')
+@app_commands.describe(role='The role to be used when a user fails to count')
+@app_commands.checks.has_permissions(ban_members=True)
+async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
+    config = Config.read()
+    config.reliable_counter_role_id = role.id
+    config.update()
+    await interaction.response.send_message(f'Reliable role was set to {role.mention}')
+
 
 if __name__ == '__main__':
     bot.run(TOKEN)

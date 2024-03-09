@@ -160,3 +160,4 @@ cython_debug/
 #.idea/
 
 database.sqlite3
+database(1).sqlite3

@@ -3,5 +3,8 @@
   "current_count": 5,
   "high_score": 58,
   "current_member_id": 1024746441798856717,
-  "put_high_score_emoji": false
+  "put_high_score_emoji": false,
+  "failed_role_id": null,
+  "reliable_counter_role_id": null,
+  "failed_member_id": null
 }
