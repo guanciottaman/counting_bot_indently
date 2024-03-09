@@ -256,7 +256,7 @@ async def list_commands(interaction: discord.Interaction):
 async def stats_user(interaction:discord.Interaction, member: discord.Member = None):
     if member is None:
         member = interaction.user
-    emb = discord.Embed(title=f'{member.global_name}\'s stats', color=discord.Color.blue())
+    emb = discord.Embed(title=f'{member.display_name}\'s stats', color=discord.Color.blue())
     conn = sqlite3.connect('database.sqlite3')
     c = conn.cursor()
     c.execute('SELECT * FROM members WHERE member_id = ?', (member.id,))
