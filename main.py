@@ -105,7 +105,6 @@ class Bot(commands.Bot):
         c = conn.cursor()
         c.execute('SELECT * FROM members WHERE member_id = ?', (message.author.id,))
         stats = c.fetchone()
-        print(stats)
         
         if stats is None:
             score = 0
@@ -115,11 +114,10 @@ class Bot(commands.Bot):
             c.execute('INSERT INTO members VALUES(?, ?, ?, ?, ?)', (message.author.id, score, correct, wrong, highest_valid_count))
             conn.commit()
         else:
-            score = stats[0]
-            correct = stats[1]
-            wrong = stats[2]
-            highest_valid_count = stats[3]
-        print(highest_valid_count)
+            score = stats[1]
+            correct = stats[2]
+            wrong = stats[3]
+            highest_valid_count = stats[4]
 
         # Wrong number
         if int(number) != int(config.current_count)+1:
@@ -139,12 +137,8 @@ class Bot(commands.Bot):
         
         # Everything is fine
         config.increment(message.author.id)
-        print(f'{config.current_count}')
-        if config.current_count > highest_valid_count:
-            highest_valid_count = config.current_count
-        print(f'{highest_valid_count = }')
-        c.execute('UPDATE members SET score = score + 1, correct = correct + 1, highest_valid_count = ? WHERE member_id = ?',
-                  (highest_valid_count, message.author.id))
+        c.execute(f'UPDATE members SET score = score + 1, correct = correct + 1{f", highest_valid_count  = {config.current_count}" if config.current_count > highest_valid_count else ""} WHERE member_id = ?',
+                  (message.author.id,))
         conn.commit()
         conn.close()
         await message.add_reaction(config.reaction_emoji())
@@ -153,6 +147,35 @@ class Bot(commands.Bot):
         reliable_counter_role = discord.utils.get(message.guild.roles, id=config.reliable_counter_role_id)
         if score >= 100 and reliable_counter_role not in message.author.roles:
             await message.author.add_roles(reliable_counter_role)
+    
+    async def handle_wrong_count(self, message: discord.Message) -> None:
+        config: Config = Config.read()
+        await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
+        await message.add_reaction('❌')
+        if config.failed_role_id is None:
+            config.reset()
+            return
+        failed_role: discord.Role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
+        if failed_role not in message.author.roles:
+            failed_member: discord.Member = await message.guild.fetch_member(config.current_member_id)
+            await failed_member.remove_roles(failed_role)
+            await message.author.add_roles(failed_role)
+        config.reset()
+
+    async def handle_wrong_member(self, message: discord.Message) -> None:
+        config: Config = Config.read()
+        await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
+        await message.add_reaction('❌')
+        if config.failed_role_id is None:
+            config.reset()
+            return
+        failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
+        if failed_role not in message.author.roles:
+            failed_member = await message.guild.fetch_member(config.current_member_id)
+            await failed_member.remove_roles(failed_role)
+            await message.author.add_roles(failed_role)
+        config.reset()
+    
         
     async def on_message_delete(self, message: discord.Message) -> None:
         if not self.is_ready():
@@ -209,33 +232,6 @@ class Bot(commands.Bot):
         if user != self.user:
             await reaction.message.channel.send(f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!', suppress_embeds=True)
 
-    async def handle_wrong_count(self, message: discord.Message) -> None:
-        config: Config = Config.read()
-        await message.channel.send(f'{message.author.mention} messed up the count! The correct number was {config.current_count + 1}\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
-        await message.add_reaction('❌')
-        if config.failed_role_id is None:
-            config.reset()
-            return
-        failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
-        if failed_role not in message.author.roles:
-            failed_member = await message.guild.fetch_member(config.current_member_id)
-            await failed_member.remove_roles(failed_role)
-            await message.author.add_roles(failed_role)
-        config.reset()
-
-    async def handle_wrong_member(self, message: discord.Message) -> None:
-        config: Config = Config.read()
-        await message.channel.send(f'{message.author.mention} messed up the count! You cannot count two numbers in a row!\nRestart by **1** and try to beat the current high score of **{config.high_score}**!')
-        await message.add_reaction('❌')
-        if config.failed_role_id is None:
-            config.reset()
-            return
-        failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
-        if failed_role not in message.author.roles:
-            failed_member = await message.guild.fetch_member(config.current_member_id)
-            await failed_member.remove_roles(failed_role)
-            await message.author.add_roles(failed_role)
-        config.reset()
     
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -285,6 +281,7 @@ async def list_commands(interaction: discord.Interaction):
 async def stats_user(interaction:discord.Interaction, member: discord.Member = None):
     if member is None:
         member = interaction.user
+    await interaction.response.defer()
     emb = discord.Embed(title=f'{member.display_name}\'s stats', color=discord.Color.blue())
     conn = sqlite3.connect('database.sqlite3')
     c = conn.cursor()
@@ -298,9 +295,10 @@ async def stats_user(interaction:discord.Interaction, member: discord.Member = N
     score = c.fetchone()[0]
     c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {score}')
     position = c.fetchone()[0]
-    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]} (#{position})\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
-    await interaction.response.send_message(embed=emb)
     conn.close()
+    emb.description = f'{member.mention}\'s stats:\n\n**Score:** {stats[1]} (#{position})\n**✅Correct:** {stats[2]}\n**❌Wrong:** {stats[3]}\n**Highest valid count:** {stats[4]}\n\n**Correct rate:** {stats[1]/stats[2]*100:.2f}%'
+    await interaction.followup.send(embed=emb)
+    
 
 @bot.tree.command(name="server_stats", description="View server counting stats")
 async def server_stats(interaction: discord.Interaction):
