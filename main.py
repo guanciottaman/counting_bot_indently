@@ -319,9 +319,9 @@ async def list_commands(interaction: discord.Interaction):
 @app_commands.describe(member='The member to get the stats for')
 async def stats_user(interaction:discord.Interaction, member: discord.Member = None):
     """Command to show the stats of a specific user"""
+    await interaction.response.defer()
     if member is None:
         member = interaction.user
-    await interaction.response.defer()
     emb = discord.Embed(title=f'{member.display_name}\'s stats', color=discord.Color.blue())
     conn = sqlite3.connect('database.sqlite3')
     c = conn.cursor()
