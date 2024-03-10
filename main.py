@@ -28,6 +28,7 @@ class Config:
     reliable_counter_role_id: Optional[int]
     failed_member_id: Optional[int]
 
+    @staticmethod
     def read():
         """Read the config.json file and return the config as a dataclass"""
         with open("config.json", "r", encoding='utf-8') as file:
