@@ -147,7 +147,7 @@ class Bot(commands.Bot):
         config.increment(message.author.id)
         c.execute(f'''UPDATE members SET score = score + 1,
 correct = correct + 1
-{f", highest_valid_count  = {config.current_count}" if config.current_count > highest_valid_count else ""}\
+{f", highest_valid_count  = {config.current_count}" if config.current_count > highest_valid_count else ""}
 WHERE member_id = ?''',
                 (message.author.id,))
         conn.commit()
