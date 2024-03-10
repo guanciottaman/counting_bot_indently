@@ -150,8 +150,8 @@ class Bot(commands.Bot):
         config.increment(message.author.id)
         c.execute(f'''UPDATE members SET score = score + 1,
 correct = correct + 1
-{f", highest_valid_count  = {config.current_count}"\
-if config.current_count > highest_valid_count else ""} WHERE member_id = ?''',
+{f", highest_valid_count  = {config.current_count}" if config.current_count > highest_valid_count else ""}\
+WHERE member_id = ?''',
                 (message.author.id,))
         conn.commit()
         conn.close()
@@ -351,8 +351,8 @@ async def server_stats(interaction: discord.Interaction):
 
     server_stats_embed = discord.Embed(
         description=f'''**Current Count**: {config.current_count}
-High Score: {config.high_score}\n{f"Last counted by: <@{config.current_member_id}>"\
-if config.current_member_id else ""}''',
+High Score: {config.high_score}
+{f"Last counted by: <@{config.current_member_id}>" if config.current_member_id else ""}''',
         color=discord.Color.blurple()
     )
     server_stats_embed.set_author(name=interaction.guild, icon_url=interaction.guild.icon)
