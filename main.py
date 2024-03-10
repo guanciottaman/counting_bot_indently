@@ -175,7 +175,7 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
             if config.failed_member_id is not None:
                 prev_failed_member: discord.Member = await message.guild.fetch_member(
                     config.failed_member_id)
-                await prev_failed_member.remove_roles(failed_role) # Remove role from previous failed user
+                await prev_failed_member.remove_roles(failed_role)
             await message.author.add_roles(failed_role)  # Add role to current user who has failed
             config.failed_member_id = message.author.id  # Designate current user as failed member
             config.update()
@@ -194,7 +194,8 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
         failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
         if failed_role not in message.author.roles:
             if config.failed_member_id is not None:
-                prev_failed_member: discord.Member = await message.guild.fetch_member(config.failed_member_id)
+                prev_failed_member: discord.Member = await message.guild.fetch_member(
+                    config.failed_member_id)
                 await prev_failed_member.remove_roles(failed_role) # Remove role from previous failed user
             await message.author.add_roles(failed_role)  # Add role to current user who has failed
             config.failed_member_id = message.author.id  # Designate current user as failed member
@@ -239,7 +240,8 @@ f'{message.author.mention} deleted his number! The current number is **{config.c
             return
         if not all(c in POSSIBLE_CHARACTERS for c in before.content):
             return
-        await after.channel.send(f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
+        await after.channel.send(
+f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
 
     async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
         """Prevents user from putting reactions in certain messages"""
@@ -268,7 +270,9 @@ f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, 
         await self.tree.sync()
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
-        c.execute('CREATE TABLE IF NOT EXISTS members (member_id INTEGER PRIMARY KEY, score INTEGER, correct INTEGER, wrong INTEGER, highest_valid_count INTEGER)')
+        c.execute('''CREATE TABLE IF NOT EXISTS members (member_id INTEGER PRIMARY KEY,
+                score INTEGER, correct INTEGER, wrong INTEGER,
+                highest_valid_count INTEGER)''')
         conn.commit()
         conn.close()
 
@@ -306,7 +310,8 @@ async def list_commands(interaction: discord.Interaction):
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(), description='')
     for command in bot.tree.walk_commands():
         print(command.name)
-        emb.description += f'\n**{command.name}** - {command.description}{" (Admins only)" if command.checks else ""}'
+        emb.description += f'''
+**{command.name}** - {command.description}{" (Admins only)" if command.checks else ""}'''
     await interaction.response.send_message(embed=emb)
 
 
@@ -364,7 +369,8 @@ High Score: {config.high_score}
 @bot.tree.command(name='leaderboard', description='Shows the first 10 users with the highest score')
 async def leaderboard(interaction: discord.Interaction):
     """Command to show the top 10 users with the highest score in Indently"""
-    emb = discord.Embed(title='Top 10 users in Indently', color=discord.Color.blue(), description='')
+    emb = discord.Embed(title='Top 10 users in Indently',
+                        color=discord.Color.blue(), description='')
 
     conn = sqlite3.connect('database.sqlite3')
     c = conn.cursor()
