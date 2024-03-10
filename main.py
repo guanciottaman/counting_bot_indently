@@ -172,13 +172,9 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
             return
         failed_role: discord.Role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
         if failed_role not in message.author.roles:
-            if config.failed_member_id is not None:
-                prev_failed_member: discord.Member = await message.guild.fetch_member(
-                    config.failed_member_id)
-                await prev_failed_member.remove_roles(failed_role)
-            await message.author.add_roles(failed_role)  # Add role to current user who has failed
-            config.failed_member_id = message.author.id  # Designate current user as failed member
-            config.update()
+            failed_member: discord.Member = await message.guild.fetch_member(config.current_member_id)
+            await failed_member.remove_roles(failed_role)
+            await message.author.add_roles(failed_role)
         config.reset()
 
     async def handle_wrong_member(self, message: discord.Message) -> None:
@@ -193,13 +189,9 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
             return
         failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
         if failed_role not in message.author.roles:
-            if config.failed_member_id is not None:
-                prev_failed_member: discord.Member = await message.guild.fetch_member(
-                    config.failed_member_id)
-                await prev_failed_member.remove_roles(failed_role) # Remove role from previous failed user
-            await message.author.add_roles(failed_role)  # Add role to current user who has failed
-            config.failed_member_id = message.author.id  # Designate current user as failed member
-            config.update()
+            failed_member: discord.Member = await message.guild.fetch_member(config.current_member_id)
+            await failed_member.remove_roles(failed_role)
+            await message.author.add_roles(failed_role)
         config.reset()
 
 
