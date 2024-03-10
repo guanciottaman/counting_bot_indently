@@ -91,9 +91,6 @@ class Bot(commands.Bot):
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
-        if not self.is_ready():
-            return
-
         if message.author == self.user:
             return
 
@@ -176,7 +173,8 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
         failed_role: discord.Role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
         if failed_role not in message.author.roles:
             if config.failed_member_id is not None:
-                prev_failed_member: discord.Member = await message.guild.fetch_member(config.failed_member_id)
+                prev_failed_member: discord.Member = await message.guild.fetch_member(
+                    config.failed_member_id)
                 await prev_failed_member.remove_roles(failed_role) # Remove role from previous failed user
             await message.author.add_roles(failed_role)  # Add role to current user who has failed
             config.failed_member_id = message.author.id  # Designate current user as failed member
@@ -221,7 +219,8 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
             return
         if not all(c in POSSIBLE_CHARACTERS for c in message.content):
             return
-        await message.channel.send(f'{message.author.mention} deleted his number! The current number is **{config.current_count}**.')
+        await message.channel.send(
+f'{message.author.mention} deleted his number! The current number is **{config.current_count}**.')
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         """Override the on_message_edit method"""
@@ -260,7 +259,9 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
             return
 
         if user != self.user:
-            await reaction.message.channel.send(f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!', suppress_embeds=True)
+            await reaction.message.channel.send(
+f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!',
+            suppress_embeds=True)
 
 
     async def setup_hook(self) -> None:
