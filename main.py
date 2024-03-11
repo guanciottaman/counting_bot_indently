@@ -161,7 +161,7 @@ WHERE member_id = ?''',
             return
         reliable_counter_role = discord.utils.get(message.guild.roles,
                                         id=config.reliable_counter_role_id)
-        if score >= 100 and reliable_counter_role not in message.author.roles:
+        if score + 1 >= 100 and reliable_counter_role not in message.author.roles:
             await message.author.add_roles(reliable_counter_role)
         # Check and remove the failed role
         if config.failed_role_id is not None:
