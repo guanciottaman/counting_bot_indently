@@ -6,5 +6,6 @@
   "put_high_score_emoji": false,
   "failed_role_id": null,
   "reliable_counter_role_id": null,
-  "failed_member_id": null
+  "failed_member_id": null,
+  "correct_inputs_by_failed_member": 0
 }
