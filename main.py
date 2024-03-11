@@ -324,11 +324,18 @@ async def set_channel(interaction: discord.Interaction, channel:discord.TextChan
 @bot.tree.command(name='listcmds', description='Lists commands')
 async def list_commands(interaction: discord.Interaction):
     """Command to list all the slash commands"""
-    emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(), description='')
-    for command in bot.tree.walk_commands():
-        print(command.name)
-        emb.description += f'''
-**{command.name}** - {command.description}{" (Admins only)" if command.checks else ""}'''
+    emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(),
+        description='''
+**sync** - Syncs the slash commands to the bot (Admins only)
+**set_channel** - Sets the channel to count in (Admins only)
+**listcmds** - Lists all the slash commands
+**stats_user** - Shows the stats of a specific user
+**stats_server** - Shows the stats of the server
+**leaderboard** - Shows the leaderboard of the server
+**set_failed_role** - Sets the role to give when a user fails (Admins only)
+**set_reliable_role** - Sets the role to give when a user passes the score of 100 (Admins only)
+**remove_failed_role** - Removes the role to give when a user fails (Admins only)
+**remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)''')
     await interaction.response.send_message(embed=emb)
 
 
@@ -386,6 +393,7 @@ High Score: {config.high_score}
 @bot.tree.command(name='leaderboard', description='Shows the first 10 users with the highest score')
 async def leaderboard(interaction: discord.Interaction):
     """Command to show the top 10 users with the highest score in Indently"""
+    await interaction.response.defer()
     emb = discord.Embed(title='Top 10 users in Indently',
                         color=discord.Color.blue(), description='')
 
@@ -399,12 +407,12 @@ async def leaderboard(interaction: discord.Interaction):
         emb.description += f'{i}. {user_obj.mention} **{user[1]}**\n'
     conn.close()
 
-    await interaction.response.send_message(embed=emb)
+    await interaction.followup.send(embed=emb)
 
 @bot.tree.command(name='set_failed_role',
                 description='Sets the role to be used when a user fails to count')
 @app_commands.describe(role='The role to be used when a user fails to count')
-@app_commands.checks.has_permissions(ban_members=True)
+@app_commands.default_permissions(ban_members=True)
 async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user fails to count"""
     config = Config.read()
@@ -416,13 +424,31 @@ async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
 @bot.tree.command(name='set_reliable_role',
                 description='Sets the role to be used when a user gets 100 of score')
 @app_commands.describe(role='The role to be used when a user fails to count')
-@app_commands.checks.has_permissions(ban_members=True)
+@app_commands.default_permissions(ban_members=True)
 async def set_reliable_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user gets 100 of score"""
     config = Config.read()
     config.reliable_counter_role_id = role.id
     config.update()
     await interaction.response.send_message(f'Reliable role was set to {role.mention}')
+
+
+@bot.tree.command(name='remove_failed_role', description='Removes the failed role feature')
+@app_commands.default_permissions(ban_members=True)
+async def remove_failed_role(interaction: discord.Interaction):
+    config = Config.read()
+    config.failed_role_id = None
+    config.update()
+    await interaction.response.send_message('Failed role removed')
+
+
+@bot.tree.command(name='remove_reliable_role', description='Removes the reliable role feature')
+@app_commands.default_permissions(ban_members=True)
+async def remove_reliable_role(interaction: discord.Interaction):
+    config = Config.read()
+    config.reliable_counter_role_id = None
+    config.update()
+    await interaction.response.send_message('Reliable role removed')
 
 
 if __name__ == '__main__':
