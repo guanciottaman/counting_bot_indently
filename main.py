@@ -27,6 +27,7 @@ class Config:
     failed_role_id: Optional[int]
     reliable_counter_role_id: Optional[int]
     failed_member_id: Optional[int]
+    correct_inputs_by_failed_member: int
 
     @staticmethod
     def read():
@@ -56,6 +57,8 @@ class Config:
     def reset(self) -> None:
         """reset current count"""
         self.current_count = 0
+        
+        self.correct_inputs_by_failed_member = 0
 
         # update current member id
         self.current_member_id = None
@@ -158,8 +161,18 @@ WHERE member_id = ?''',
             return
         reliable_counter_role = discord.utils.get(message.guild.roles,
                                         id=config.reliable_counter_role_id)
-        if score >= 100 and reliable_counter_role not in message.author.roles:
+        if score + 1 >= 100 and reliable_counter_role not in message.author.roles:
             await message.author.add_roles(reliable_counter_role)
+        # Check and remove the failed role
+        if config.failed_role_id is not None:
+            failed_role: discord.Role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
+            if failed_role in message.author.roles:
+                config.correct_inputs_by_failed_member += 1
+                if config.correct_inputs_by_failed_member >= 30:
+                    await message.author.remove_roles(failed_role)
+                    config.failed_member_id = None
+                    config.correct_inputs_by_failed_member = 0
+                config.update()
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         """Handles when someone messes up the count with a wrong number"""
