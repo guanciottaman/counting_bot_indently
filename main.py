@@ -274,7 +274,7 @@ f'{after.author.mention} edited his number! The current number is **{config.curr
         if not all(c in POSSIBLE_CHARACTERS for c in reaction.message.content):
             return
 
-        if reaction.emoji not in ('✅', '❌', '😏', '💯', '🎉', '👹'):
+        if reaction.emoji in ('✅', '❌', '😏', '💯', '🎉', '👹'):
             return
 
         if user != self.user:
