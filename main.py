@@ -57,7 +57,7 @@ class Config:
     def reset(self) -> None:
         """reset current count"""
         self.current_count = 0
-        
+
         self.correct_inputs_by_failed_member = 0
 
         # update current member id
@@ -272,6 +272,9 @@ f'{after.author.mention} edited his number! The current number is **{config.curr
             return
 
         if not all(c in POSSIBLE_CHARACTERS for c in reaction.message.content):
+            return
+
+        if reaction.emoji not in ('✅', '❌', '😏', '💯', '🎉', '👹'):
             return
 
         if user != self.user:
