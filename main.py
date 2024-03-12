@@ -257,32 +257,6 @@ f'{message.author.mention} deleted his number! The current number is **{config.c
         await after.channel.send(
 f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
 
-    async def on_reaction_add(self, reaction: discord.Reaction, user: discord.User):
-        """Prevents user from putting reactions in certain messages"""
-        if not self.is_ready():
-            return
-
-        if reaction.message.author == self.user:
-            return
-
-        config = Config.read()
-
-        # Check if the message is in the channel
-        if reaction.message.channel.id != config.channel_id:
-            return
-
-        if not all(c in POSSIBLE_CHARACTERS for c in reaction.message.content):
-            return
-
-        if reaction.emoji in ('✅', '❌', '😏', '💯', '🎉', '👹'):
-            return
-
-        if user != self.user:
-            await reaction.message.channel.send(
-f'{user.mention} has put a reaction to the message {reaction.message.jump_url}, it isn\' a valid number!',
-            suppress_embeds=True)
-
-
     async def setup_hook(self) -> None:
         await self.tree.sync()
         conn = sqlite3.connect('database.sqlite3')
