@@ -93,13 +93,15 @@ class Bot(commands.Bot):
         """Override the on_ready method"""
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
         config = Config.read()
-        channel = bot.get_channel(config.channel_id)
-        await channel.send(f'I\'m now online! The current number is {config.current_count}.')
+        if config.channel_id is not None:
+            channel = bot.get_channel(config.channel_id)
+            await channel.send(f'I\'m now online! The current number is {config.current_count}.')
 
     async def on_disconnect(self) -> None:
         config = Config.read()
-        channel = bot.get_channel(config.channel_id)
-        await channel.send('Bot is now offline.')
+        if config.channel_id is not None:
+            channel = bot.get_channel(config.channel_id)
+            await channel.send('Bot is now offline.')
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
