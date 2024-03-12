@@ -431,6 +431,7 @@ async def remove_reliable_role(interaction: discord.Interaction):
 
 
 @bot.tree.command(name='disconnect', description='Makes the bot go offline')
+@app_commands.default_permissions(ban_members=True)
 async def disconnect(interaction: discord.Interaction):
     config = Config.read()
     if config.channel_id is not None:
