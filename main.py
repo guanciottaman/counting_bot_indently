@@ -95,7 +95,7 @@ class Bot(commands.Bot):
         config = Config.read()
         if config.channel_id is not None and config.current_member_id is not None:
             channel = bot.get_channel(config.channel_id)
-            member = channel.guild.get_member(config.current_member_id)
+            member = await channel.guild.fetch_member(config.current_member_id)
             await channel.send(f'I\'m now online! The current number is {config.current_count}, counted by {member.mention}')
 
 
