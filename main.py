@@ -97,11 +97,6 @@ class Bot(commands.Bot):
             channel = bot.get_channel(config.channel_id)
             await channel.send(f'I\'m now online! The current number is {config.current_count}.')
 
-    async def on_disconnect(self) -> None:
-        config = Config.read()
-        if config.channel_id is not None:
-            channel = bot.get_channel(config.channel_id)
-            await channel.send('Bot is now offline.')
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
@@ -433,6 +428,15 @@ async def remove_reliable_role(interaction: discord.Interaction):
     config.reliable_counter_role_id = None
     config.update()
     await interaction.response.send_message('Reliable role removed')
+
+
+@bot.tree.command(name='disconnect', description='Makes the bot go offline')
+async def disconnect(interaction: discord.Interaction):
+    config = Config.read()
+    if config.channel_id is not None:
+        channel = bot.get_channel(config.channel_id)
+        await channel.send('Bot is now offline.')
+    await bot.close()
 
 
 if __name__ == '__main__':
