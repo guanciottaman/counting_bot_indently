@@ -93,9 +93,10 @@ class Bot(commands.Bot):
         """Override the on_ready method"""
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
         config = Config.read()
-        if config.channel_id is not None:
+        if config.channel_id is not None and config.current_member_id is not None:
             channel = bot.get_channel(config.channel_id)
-            await channel.send(f'I\'m now online! The current number is {config.current_count}.')
+            member = channel.guild.get_member(config.current_member_id)
+            await channel.send(f'I\'m now online! The current number is {config.current_count}, counted by {member.mention}')
 
 
     async def on_message(self, message: discord.Message) -> None:
