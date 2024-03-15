@@ -1,8 +1,8 @@
 {
-  "channel_id": 1215040718993756310,
-  "current_count": 5,
-  "high_score": 58,
-  "current_member_id": 1024746441798856717,
+  "channel_id": null,
+  "current_count": 0,
+  "high_score": 0,
+  "current_member_id": null,
   "put_high_score_emoji": false,
   "failed_role_id": null,
   "reliable_counter_role_id": null,
