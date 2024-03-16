@@ -241,7 +241,7 @@ Restart from **1** and try to beat the current high score of **{config.high_scor
         if not all(c in POSSIBLE_CHARACTERS for c in message.content):
             return
         await message.channel.send(
-f'{message.author.mention} deleted his number! The **next** number is **{config.current_count + 1}**.')
+f'{message.author.mention} deleted their number! The **next** number is **{config.current_count + 1}**.')
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         """Override the on_message_edit method"""
@@ -261,7 +261,7 @@ f'{message.author.mention} deleted his number! The **next** number is **{config.
         if not all(c in POSSIBLE_CHARACTERS for c in before.content):
             return
         await after.channel.send(
-f'{after.author.mention} edited his number! The **next** number is **{config.current_count + 1}**.')
+f'{after.author.mention} edited their number! The **next** number is **{config.current_count + 1}**.')
 
     async def setup_hook(self) -> None:
         await self.tree.sync()
