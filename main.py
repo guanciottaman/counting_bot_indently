@@ -96,7 +96,7 @@ class Bot(commands.Bot):
         if config.channel_id is not None and config.current_member_id is not None:
             channel = bot.get_channel(config.channel_id)
             member = await channel.guild.fetch_member(config.current_member_id)
-            await channel.send(f'I\'m now online! The current number is {config.current_count}, counted by {member.mention}')
+            await channel.send(f'I\'m now online! Last counted by {member.mention}. The **next** number is **{config.current_count + 1}**.')
 
 
     async def on_message(self, message: discord.Message) -> None:
@@ -185,7 +185,7 @@ WHERE member_id = ?''',
         config: Config = Config.read()
         await message.channel.send(f'''{message.author.mention} messed up the count!\
 The correct number was {config.current_count + 1}
-Restart by **1** and try to beat the current high score of **{config.high_score}**!''')
+Restart from **1** and try to beat the current high score of **{config.high_score}**!''')
         await message.add_reaction('❌')
         if config.failed_role_id is None:
             config.reset()
@@ -206,7 +206,7 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
         config: Config = Config.read()
         await message.channel.send(f'''{message.author.mention} messed up the count!\
 You cannot count two numbers in a row!
-Restart by **1** and try to beat the current high score of **{config.high_score}**!''')
+Restart from **1** and try to beat the current high score of **{config.high_score}**!''')
         await message.add_reaction('❌')
         if config.failed_role_id is None:
             config.reset()
@@ -241,7 +241,7 @@ Restart by **1** and try to beat the current high score of **{config.high_score}
         if not all(c in POSSIBLE_CHARACTERS for c in message.content):
             return
         await message.channel.send(
-f'{message.author.mention} deleted his number! The current number is **{config.current_count}**.')
+f'{message.author.mention} deleted his number! The **next** number is **{config.current_count + 1}**.')
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         """Override the on_message_edit method"""
@@ -261,7 +261,7 @@ f'{message.author.mention} deleted his number! The current number is **{config.c
         if not all(c in POSSIBLE_CHARACTERS for c in before.content):
             return
         await after.channel.send(
-f'{after.author.mention} edited his number! The current number is **{config.current_count}**.')
+f'{after.author.mention} edited his number! The **next** number is **{config.current_count + 1}**.')
 
     async def setup_hook(self) -> None:
         await self.tree.sync()
