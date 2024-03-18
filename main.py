@@ -200,7 +200,6 @@ class Bot(commands.Bot):
 
             await asyncio.sleep(5)
             self._busy -= 1
-            print(f'{self._busy=}')
             self.dump_config()
 
             return
@@ -217,7 +216,6 @@ class Bot(commands.Bot):
 
             await asyncio.sleep(5)
             self._busy -= 1
-            print(f'{self._busy=}')
             self.dump_config()
 
             return
@@ -256,7 +254,6 @@ WHERE member_id = ?''',
 
         await asyncio.sleep(5)
         self._busy -= 1
-        print(f'{self._busy=}')
         self.dump_config()
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
@@ -269,12 +266,18 @@ The correct number was {self._config.current_count + 1}
 Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
 
+        if self.failed_role is None:
+            return
+
         # TODO defer setting role?
         # Remove failed role from previous failed user
         if (self._config.failed_member_id is not None
                 and self._config.failed_member_id != message.author.id):
-            prev_failed_member: discord.Member = await message.guild.fetch_member(self._config.failed_member_id)
-            await prev_failed_member.remove_roles(self.failed_role)
+            try:
+                prev_failed_member: discord.Member = await message.guild.fetch_member(self._config.failed_member_id)
+                await prev_failed_member.remove_roles(self.failed_role)
+            except discord.NotFound:
+                print(f'User with id {self._config.failed_member_id} not found in the server.')
 
         await message.author.add_roles(self.failed_role)  # Add role to current user who has failed
         self._config.failed_member_id = message.author.id  # Designate current user as failed member
@@ -289,12 +292,18 @@ You cannot count two numbers in a row!
 Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
 
+        if self.failed_role is None:
+            return
+
         # TODO defer setting role?
         # Remove role from previous failed member
         if (self._config.failed_member_id is not None
                 and self._config.failed_member_id != message.author.id):
-            prev_failed_member: discord.Member = await message.guild.fetch_member(self._config.failed_member_id)
-            await prev_failed_member.remove_roles(self.failed_role)
+            try:
+                prev_failed_member: discord.Member = await message.guild.fetch_member(self._config.failed_member_id)
+                await prev_failed_member.remove_roles(self.failed_role)
+            except discord.NotFound:
+                print(f'User with id {self._config.failed_member_id} not found in the server.')
 
         await message.author.add_roles(self.failed_role)   # Add failed role to current user
         self._config.failed_member_id = message.author.id  # Designate current user as failed member
@@ -503,6 +512,7 @@ async def set_reliable_role(interaction: discord.Interaction, role: discord.Role
 async def remove_failed_role(interaction: discord.Interaction):
     config = Config.read()
     config.failed_role_id = None
+    config.failed_member_id = None
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
