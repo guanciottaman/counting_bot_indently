@@ -20,22 +20,26 @@ POSSIBLE_CHARACTERS: str = string.digits + '+-*/. ()'
 @dataclass
 class Config:
     """Configuration for the bot"""
-    channel_id: Optional[int]
-    current_count: int
-    high_score: int
-    current_member_id: Optional[int]
-    put_high_score_emoji: bool
-    failed_role_id: Optional[int]
-    reliable_counter_role_id: Optional[int]
-    failed_member_id: Optional[int]
-    correct_inputs_by_failed_member: int
+    channel_id: Optional[int] = None
+    current_count: int = 0
+    high_score: int = 0
+    current_member_id: Optional[int] = None
+    put_high_score_emoji: bool = False
+    failed_role_id: Optional[int] = None
+    reliable_counter_role_id: Optional[int] = None
+    failed_member_id: Optional[int] = None
+    correct_inputs_by_failed_member: int = 0
 
     @staticmethod
     def read():
-        """Read the config.json file and return the config as a dataclass"""
-        with open("config.json", "r", encoding='utf-8') as file:
-            config = Config(**json.load(file))
-        return config
+        _config: Optional[Config] = None
+        try:
+            with open("config.json", "r") as file:
+                _config = Config(**json.load(file))
+        except FileNotFoundError:
+            _config = Config()
+            _config.update()
+        return _config
 
     def update(self) -> None:
         """Update the config.json file"""

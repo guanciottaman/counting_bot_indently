@@ -161,3 +161,4 @@ cython_debug/
 
 database.sqlite3
 database(1).sqlite3
+config.json
