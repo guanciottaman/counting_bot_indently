@@ -1,4 +1,5 @@
 """Counting Discord bot for Indently server"""
+import asyncio
 import json
 import os
 import sqlite3
@@ -38,16 +39,19 @@ class Config:
                 _config = Config(**json.load(file))
         except FileNotFoundError:
             _config = Config()
-            _config.update()
+            _config.dump_data()
         return _config
 
-    def update(self) -> None:
+    def dump_data(self) -> None:
         """Update the config.json file"""
         with open("config.json", "w", encoding='utf-8') as file:
             json.dump(self.__dict__, file, indent=2)
 
     def increment(self, member_id: int) -> None:
-        """Increment the current count and update"""
+        """
+        Increment the current count.
+        NOTE: config is no longer dumped by default. Explicitly call config.dump().
+        """
         # increment current count
         self.current_count += 1
 
@@ -57,10 +61,11 @@ class Config:
         # check the high score
         self.high_score = max(self.high_score, self.current_count)
 
-        self.update()
-
     def reset(self) -> None:
-        """reset current count"""
+        """
+        Reset current count.
+        NOTE: config is no longer dumped by default. Explicitly call config.dump_data().
+        """
         self.current_count = 0
 
         self.correct_inputs_by_failed_member = 0
@@ -69,14 +74,14 @@ class Config:
         self.current_member_id = None
         self.put_high_score_emoji = False
 
-        self.update()
-
     def reaction_emoji(self) -> str:
-        """Get the reaction emoji based on the current count"""
+        """
+        Get the reaction emoji based on the current count.
+        NOTE: Data is no longer dumped automatically. Explicitly call config.data_dump().
+        """
         if self.current_count == self.high_score and not self.put_high_score_emoji:
             emoji = "🎉"
-            self.put_high_score_emoji = True
-            self.update()
+            self.put_high_score_emoji = True  # Needs a config data dump
         elif self.current_count == 100:
             emoji = "💯"
         elif self.current_count == 69:
@@ -100,10 +105,19 @@ class Bot(commands.Bot):
         self.reliable_role: Optional[discord.Role] = None
         super().__init__(command_prefix='!', intents=intents)
 
-    def update_config(self):  # TODO async def?
-        # TODO dump if self.busy == 0
-        # TODO create a method for force re-reading the config file - to be used from slash commands.
-        pass
+    def dump_config(self):
+        """
+        Dump the config file if not busy.
+        """
+        if self._busy == 0:
+            self._config.dump_data()
+
+    def read_config(self):
+        """
+        Force re-reading the config from the json to the instance variable.
+        Mostly for use by slash command functions after they have changed the config values.
+        """
+        self._config = Config.read()
 
     async def on_ready(self) -> None:
         """Override the on_ready method"""
@@ -139,6 +153,7 @@ class Bot(commands.Bot):
         if not all(c in POSSIBLE_CHARACTERS for c in content) or not any(char.isdigit() for char in content):
             return
 
+        self._busy += 1
         number: int = round(eval(content))
 
         conn = sqlite3.connect('database.sqlite3')
@@ -162,24 +177,42 @@ class Bot(commands.Bot):
 
         # Wrong number
         if int(number) != int(self._config.current_count) + 1:
+
             await self.handle_wrong_count(message)
+
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
                       (message.author.id,))
+
             conn.commit()
             conn.close()
+
+            await asyncio.sleep(5)
+            self._busy -= 1
+            print(f'{self._busy=}')
+            self.dump_config()
+
             return
 
         # Wrong member
         if self._config.current_count and self._config.current_member_id == message.author.id:
+
             await self.handle_wrong_member(message)
+
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
                       (message.author.id,))
             conn.commit()
             conn.close()
+
+            await asyncio.sleep(5)
+            self._busy -= 1
+            print(f'{self._busy=}')
+            self.dump_config()
+
             return
 
         # Everything is fine
-        self._config.increment(message.author.id)
+        self._config.increment(message.author.id)  # config dump triggered at the end of the method
+
         c.execute(f'''UPDATE members SET score = score + 1,
 correct = correct + 1
 {f", highest_valid_count  = {self._config.current_count}" if self._config.current_count > highest_valid_count else ""}
@@ -187,7 +220,8 @@ WHERE member_id = ?''',
                   (message.author.id,))
         conn.commit()
         conn.close()
-        await message.add_reaction(self._config.reaction_emoji())
+
+        await message.add_reaction(self._config.reaction_emoji())  # config dumping done at the end of the method
 
         # Check and add/remove reliable counter role
         # TODO: defer until not busy?
@@ -207,7 +241,11 @@ WHERE member_id = ?''',
                 await message.author.remove_roles(self.failed_role)
                 self._config.failed_member_id = None
                 self._config.correct_inputs_by_failed_member = 0
-            self._config.update()  # TODO use self.update_config
+
+        await asyncio.sleep(5)
+        self._busy -= 1
+        print(f'{self._busy=}')
+        self.dump_config()
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         """Handles when someone messes up the count with a wrong number"""
@@ -218,7 +256,7 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
         await message.add_reaction('❌')
 
         if self.failed_role is None:
-            self._config.reset()  # TODO defer
+            self._config.reset()  # config dump is triggered in on_message
             return
 
         # TODO defer setting role?
@@ -229,7 +267,7 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
         await message.author.add_roles(self.failed_role)  # Add role to current user who has failed
         self._config.failed_member_id = message.author.id  # Designate current user as failed member
 
-        self._config.reset()  # TODO defer
+        self._config.reset()  # config dump is triggered in on_message
 
     async def handle_wrong_member(self, message: discord.Message) -> None:
         """Handles when someone messes up the count by counting twice"""
@@ -240,7 +278,7 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
         await message.add_reaction('❌')
 
         if self.failed_role is None:
-            self._config.reset()  # TODO defer
+            self._config.reset()  # config dump is triggered in on_message
             return
 
         if (self._config.failed_member_id is not None
@@ -251,7 +289,7 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
         await message.author.add_roles(self.failed_role)   # Add failed role to current user
         self._config.failed_member_id = message.author.id  # Designate current user as failed member
 
-        self._config.reset()  # TODO defer
+        self._config.reset()  # config dump is triggered in on_message
 
     async def on_message_delete(self, message: discord.Message) -> None:
         """Post a message in the channel if a user deletes their input."""
@@ -330,7 +368,8 @@ async def set_channel(interaction: discord.Interaction, channel: discord.TextCha
         return
     config = Config.read()
     config.channel_id = channel.id
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
     await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
 
 
@@ -431,7 +470,8 @@ async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user fails to count"""
     config = Config.read()
     config.failed_role_id = role.id
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
     await interaction.response.send_message(f'Failed role was set to {role.mention}')
 
 
@@ -443,7 +483,8 @@ async def set_reliable_role(interaction: discord.Interaction, role: discord.Role
     """Command to set the role to be used when a user gets 100 of score"""
     config = Config.read()
     config.reliable_counter_role_id = role.id
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
     await interaction.response.send_message(f'Reliable role was set to {role.mention}')
 
 
@@ -452,7 +493,8 @@ async def set_reliable_role(interaction: discord.Interaction, role: discord.Role
 async def remove_failed_role(interaction: discord.Interaction):
     config = Config.read()
     config.failed_role_id = None
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
     await interaction.response.send_message('Failed role removed')
 
 
@@ -461,7 +503,8 @@ async def remove_failed_role(interaction: discord.Interaction):
 async def remove_reliable_role(interaction: discord.Interaction):
     config = Config.read()
     config.reliable_counter_role_id = None
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
     await interaction.response.send_message('Reliable role removed')
 
 
