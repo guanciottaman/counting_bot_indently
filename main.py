@@ -16,6 +16,7 @@ load_dotenv('.env')
 TOKEN: str = os.getenv('TOKEN')
 POSSIBLE_CHARACTERS: str = string.digits + '+-*/. ()'
 
+
 @dataclass
 class Config:
     """Configuration for the bot"""
@@ -82,8 +83,10 @@ class Config:
             emoji = "✅"
         return emoji
 
+
 class Bot(commands.Bot):
     """Counting Discord bot for Indently server"""
+
     def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
@@ -96,8 +99,8 @@ class Bot(commands.Bot):
         if config.channel_id is not None and config.current_member_id is not None:
             channel = bot.get_channel(config.channel_id)
             member = await channel.guild.fetch_member(config.current_member_id)
-            await channel.send(f'I\'m now online! Last counted by {member.mention}. The **next** number is **{config.current_count + 1}**.')
-
+            await channel.send(
+                f'I\'m now online! Last counted by {member.mention}. The **next** number is **{config.current_count + 1}**.')
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
@@ -127,7 +130,7 @@ class Bot(commands.Bot):
             wrong = 0
             highest_valid_count = 0
             c.execute('INSERT INTO members VALUES(?, ?, ?, ?, ?)',
-                    (message.author.id, score, correct, wrong, highest_valid_count))
+                      (message.author.id, score, correct, wrong, highest_valid_count))
             conn.commit()
         else:
             score = stats[1]
@@ -136,10 +139,10 @@ class Bot(commands.Bot):
             highest_valid_count = stats[4]
 
         # Wrong number
-        if int(number) != int(config.current_count)+1:
+        if int(number) != int(config.current_count) + 1:
             await self.handle_wrong_count(message)
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
-                    (message.author.id,))
+                      (message.author.id,))
             conn.commit()
             conn.close()
             return
@@ -148,7 +151,7 @@ class Bot(commands.Bot):
         if config.current_count and config.current_member_id == message.author.id:
             await self.handle_wrong_member(message)
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
-                    (message.author.id,))
+                      (message.author.id,))
             conn.commit()
             conn.close()
             return
@@ -159,14 +162,14 @@ class Bot(commands.Bot):
 correct = correct + 1
 {f", highest_valid_count  = {config.current_count}" if config.current_count > highest_valid_count else ""}
 WHERE member_id = ?''',
-                (message.author.id,))
+                  (message.author.id,))
         conn.commit()
         conn.close()
         await message.add_reaction(config.reaction_emoji())
         if config.reliable_counter_role_id is None:
             return
         reliable_counter_role = discord.utils.get(message.guild.roles,
-                                        id=config.reliable_counter_role_id)
+                                                  id=config.reliable_counter_role_id)
         if score + 1 >= 100 and reliable_counter_role not in message.author.roles:
             await message.author.add_roles(reliable_counter_role)
         # Check and remove the failed role
@@ -222,7 +225,6 @@ Restart from **1** and try to beat the current high score of **{config.high_scor
             config.update()
         config.reset()
 
-
     async def on_message_delete(self, message: discord.Message) -> None:
         """Override the on_message_delete method"""
         if not self.is_ready():
@@ -241,7 +243,7 @@ Restart from **1** and try to beat the current high score of **{config.high_scor
         if not all(c in POSSIBLE_CHARACTERS for c in message.content):
             return
         await message.channel.send(
-f'{message.author.mention} deleted their number! The **next** number is **{config.current_count + 1}**.')
+            f'{message.author.mention} deleted their number! The **next** number is **{config.current_count + 1}**.')
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         """Override the on_message_edit method"""
@@ -261,7 +263,7 @@ f'{message.author.mention} deleted their number! The **next** number is **{confi
         if not all(c in POSSIBLE_CHARACTERS for c in before.content):
             return
         await after.channel.send(
-f'{after.author.mention} edited their number! The **next** number is **{config.current_count + 1}**.')
+            f'{after.author.mention} edited their number! The **next** number is **{config.current_count + 1}**.')
 
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -272,6 +274,7 @@ f'{after.author.mention} edited their number! The **next** number is **{config.c
                 highest_valid_count INTEGER)''')
         conn.commit()
         conn.close()
+
 
 bot = Bot()
 
@@ -291,7 +294,7 @@ async def sync(interaction: discord.Interaction):
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 @app_commands.checks.has_permissions(ban_members=True)
-async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
+async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     """Command to set the channel to count in"""
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
@@ -301,11 +304,12 @@ async def set_channel(interaction: discord.Interaction, channel:discord.TextChan
     config.update()
     await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
 
+
 @bot.tree.command(name='listcmds', description='Lists commands')
 async def list_commands(interaction: discord.Interaction):
     """Command to list all the slash commands"""
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(),
-        description='''
+                        description='''
 **sync** - Syncs the slash commands to the bot (Admins only)
 **set_channel** - Sets the channel to count in (Admins only)
 **listcmds** - Lists all the slash commands
@@ -321,7 +325,7 @@ async def list_commands(interaction: discord.Interaction):
 
 @bot.tree.command(name='stats_user', description='Shows the user stats')
 @app_commands.describe(member='The member to get the stats for')
-async def stats_user(interaction:discord.Interaction, member: discord.Member = None):
+async def stats_user(interaction: discord.Interaction, member: discord.Member = None):
     """Command to show the stats of a specific user"""
     await interaction.response.defer()
     if member is None:
@@ -345,7 +349,7 @@ async def stats_user(interaction:discord.Interaction, member: discord.Member = N
 **✅Correct:** {stats[2]}
 **❌Wrong:** {stats[3]}
 **Highest valid count:** {stats[4]}\n
-**Correct rate:** {stats[1]/stats[2]*100:.2f}%'''
+**Correct rate:** {stats[1] / stats[2] * 100:.2f}%'''
     await interaction.followup.send(embed=emb)
 
 
@@ -389,8 +393,9 @@ async def leaderboard(interaction: discord.Interaction):
 
     await interaction.followup.send(embed=emb)
 
+
 @bot.tree.command(name='set_failed_role',
-                description='Sets the role to be used when a user fails to count')
+                  description='Sets the role to be used when a user fails to count')
 @app_commands.describe(role='The role to be used when a user fails to count')
 @app_commands.default_permissions(ban_members=True)
 async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
@@ -402,7 +407,7 @@ async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
 
 
 @bot.tree.command(name='set_reliable_role',
-                description='Sets the role to be used when a user gets 100 of score')
+                  description='Sets the role to be used when a user gets 100 of score')
 @app_commands.describe(role='The role to be used when a user fails to count')
 @app_commands.default_permissions(ban_members=True)
 async def set_reliable_role(interaction: discord.Interaction, role: discord.Role):
