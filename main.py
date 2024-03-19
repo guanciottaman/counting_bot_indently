@@ -122,12 +122,17 @@ class Bot(commands.Bot):
     async def on_ready(self) -> None:
         """Override the on_ready method"""
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
-        if self._config.channel_id is not None and self._config.current_member_id is not None:
+
+        if self._config.channel_id is not None:
             channel = bot.get_channel(self._config.channel_id)
-            member = await channel.guild.fetch_member(self._config.current_member_id)
-            await channel.send(
-                f'I\'m now online! Last counted by {member.mention}. The **next** number is '
-                f'**{self._config.current_count + 1}**.')
+
+            if self._config.current_member_id is not None:
+                member = await channel.guild.fetch_member(self._config.current_member_id)
+                await channel.send(
+                    f'I\'m now online! Last counted by {member.mention}. The **next** number is '
+                    f'**{self._config.current_count + 1}**.')
+            else:
+                await channel.send(f'I\'m now online!')
 
         self.set_roles()
 
