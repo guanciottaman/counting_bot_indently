@@ -175,22 +175,17 @@ class Bot(commands.Bot):
 
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
-        c.execute('SELECT * FROM members WHERE member_id = ?', (message.author.id,))
+        c.execute(f'SELECT score, highest_valid_count FROM members WHERE member_id = {message.author.id}')
         stats: tuple[int] = c.fetchone()
 
         if stats is None:
             score = 0
-            correct = 0  # TODO not needed
-            wrong = 0    # TODO not needed
             highest_valid_count = 0
-            c.execute('INSERT INTO members VALUES(?, ?, ?, ?, ?)',
-                      (message.author.id, score, correct, wrong, highest_valid_count))
+            c.execute(f'INSERT INTO members VALUES({message.author.id}, 0, 0, 0, 0)')
             conn.commit()
         else:
-            score = stats[1]
-            correct = stats[2]  # TODO not needed
-            wrong = stats[3]    # TODO not needed
-            highest_valid_count = stats[4]
+            score = stats[0]
+            highest_valid_count = stats[1]
 
         # Wrong number
         if int(number) != int(self._config.current_count) + 1:
