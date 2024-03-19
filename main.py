@@ -443,9 +443,9 @@ async def server_stats(interaction: discord.Interaction):
     """Command to show the stats of the server"""
     config = Config.read()
 
-    # channel not seted yet
+    # channel not set yet
     if config.channel_id is None:
-        await interaction.response.send_message("counting channel not setted yet!")
+        await interaction.response.send_message("Counting channel not set yet!")
         return
 
     server_stats_embed = discord.Embed(
@@ -513,6 +513,7 @@ async def remove_failed_role(interaction: discord.Interaction):
     config = Config.read()
     config.failed_role_id = None
     config.failed_member_id = None
+    config.correct_inputs_by_failed_member = 0
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
