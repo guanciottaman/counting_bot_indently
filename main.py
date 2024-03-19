@@ -157,6 +157,18 @@ class Bot(commands.Bot):
 
             break
 
+    async def add_remove_reliable_role(self, new_score: int, message: discord.Message):
+        """
+        Check the score and add or remove the reliable counter role.
+        """
+        if self.reliable_role is not None:
+
+            if new_score >= 100 and self.reliable_role not in message.author.roles:  # Add role if score >= 100
+                await message.author.add_roles(self.reliable_role)
+
+            if new_score < 100 and self.reliable_role in message.author.roles:  # Remove role if score < 100
+                await message.author.remove_roles(self.reliable_role)
+
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
         if message.author == self.user:
@@ -198,6 +210,11 @@ class Bot(commands.Bot):
             conn.commit()
             conn.close()
 
+            # Check and add/remove reliable counter role
+            # TODO: defer until not busy?
+            score -= 1
+            await self.add_remove_reliable_role(score, message)
+
             await asyncio.sleep(5)
             self._busy -= 1
             self.dump_config()
@@ -213,6 +230,11 @@ class Bot(commands.Bot):
                       (message.author.id,))
             conn.commit()
             conn.close()
+
+            # Check and add/remove reliable counter role
+            # TODO: defer until not busy?
+            score -= 1
+            await self.add_remove_reliable_role(score, message)
 
             await asyncio.sleep(5)
             self._busy -= 1
@@ -235,13 +257,8 @@ WHERE member_id = ?''',
 
         # Check and add/remove reliable counter role
         # TODO: defer until not busy?
-        if self.reliable_role is not None:
-
-            if score + 1 >= 100 and self.reliable_role not in message.author.roles:  # Add role if score >= 100
-                await message.author.add_roles(self.reliable_role)
-
-            if score < 100 and self.reliable_role in message.author.roles:  # Remove role if score < 100
-                await message.author.remove_roles(self.reliable_role)
+        score += 1
+        await self.add_remove_reliable_role(score, message)
 
         # Check and remove the failed role
         # TODO: defer until not busy?
