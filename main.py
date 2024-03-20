@@ -1,4 +1,5 @@
 """Counting Discord bot for Indently server"""
+import asyncio
 import json
 import os
 import sqlite3
@@ -16,33 +17,41 @@ load_dotenv('.env')
 TOKEN: str = os.getenv('TOKEN')
 POSSIBLE_CHARACTERS: str = string.digits + '+-*/. ()'
 
+
 @dataclass
 class Config:
     """Configuration for the bot"""
-    channel_id: Optional[int]
-    current_count: int
-    high_score: int
-    current_member_id: Optional[int]
-    put_high_score_emoji: bool
-    failed_role_id: Optional[int]
-    reliable_counter_role_id: Optional[int]
-    failed_member_id: Optional[int]
-    correct_inputs_by_failed_member: int
+    channel_id: Optional[int] = None
+    current_count: int = 0
+    high_score: int = 0
+    current_member_id: Optional[int] = None
+    put_high_score_emoji: bool = False
+    failed_role_id: Optional[int] = None
+    reliable_counter_role_id: Optional[int] = None
+    failed_member_id: Optional[int] = None
+    correct_inputs_by_failed_member: int = 0
 
     @staticmethod
     def read():
-        """Read the config.json file and return the config as a dataclass"""
-        with open("config.json", "r", encoding='utf-8') as file:
-            config = Config(**json.load(file))
-        return config
+        _config: Optional[Config] = None
+        try:
+            with open("config.json", "r") as file:
+                _config = Config(**json.load(file))
+        except FileNotFoundError:
+            _config = Config()
+            _config.dump_data()
+        return _config
 
-    def update(self) -> None:
+    def dump_data(self) -> None:
         """Update the config.json file"""
         with open("config.json", "w", encoding='utf-8') as file:
             json.dump(self.__dict__, file, indent=2)
 
     def increment(self, member_id: int) -> None:
-        """Increment the current count and update"""
+        """
+        Increment the current count.
+        NOTE: config is no longer dumped by default. Explicitly call config.dump().
+        """
         # increment current count
         self.current_count += 1
 
@@ -52,10 +61,11 @@ class Config:
         # check the high score
         self.high_score = max(self.high_score, self.current_count)
 
-        self.update()
-
     def reset(self) -> None:
-        """reset current count"""
+        """
+        Reset current count.
+        NOTE: config is no longer dumped by default. Explicitly call config.dump_data().
+        """
         self.current_count = 0
 
         self.correct_inputs_by_failed_member = 0
@@ -64,14 +74,14 @@ class Config:
         self.current_member_id = None
         self.put_high_score_emoji = False
 
-        self.update()
-
     def reaction_emoji(self) -> str:
-        """Get the reaction emoji based on the current count"""
+        """
+        Get the reaction emoji based on the current count.
+        NOTE: Data is no longer dumped automatically. Explicitly call config.data_dump().
+        """
         if self.current_count == self.high_score and not self.put_high_score_emoji:
             emoji = "🎉"
-            self.put_high_score_emoji = True
-            self.update()
+            self.put_high_score_emoji = True  # Needs a config data dump
         elif self.current_count == 100:
             emoji = "💯"
         elif self.current_count == 69:
@@ -82,186 +92,283 @@ class Config:
             emoji = "✅"
         return emoji
 
+
 class Bot(commands.Bot):
-    """Counting Discord bot for Indently server"""
+    """Counting Discord bot for Indently discord server."""
+
     def __init__(self) -> None:
         intents = discord.Intents.default()
         intents.message_content = True
+        intents.members = True
+        self._config: Config = Config.read()
+        self._busy: int = 0
+        self.failed_role: Optional[discord.Role] = None
+        self.reliable_role: Optional[discord.Role] = None
         super().__init__(command_prefix='!', intents=intents)
+
+    def read_config(self):
+        """
+        Force re-reading the config from the json to the instance variable.
+        Mostly for use by slash command functions after they have changed the config values.
+        """
+        self._config = Config.read()
 
     async def on_ready(self) -> None:
         """Override the on_ready method"""
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
-        config = Config.read()
-        if config.channel_id is not None and config.current_member_id is not None:
-            channel = bot.get_channel(config.channel_id)
-            member = await channel.guild.fetch_member(config.current_member_id)
-            await channel.send(f'I\'m now online! Last counted by {member.mention}. The **next** number is **{config.current_count + 1}**.')
 
+        if self._config.channel_id is not None:
+            channel = bot.get_channel(self._config.channel_id)
+
+            if self._config.current_member_id is not None:
+                member = await channel.guild.fetch_member(self._config.current_member_id)
+                await channel.send(
+                    f'I\'m now online! Last counted by {member.mention}. The **next** number is '
+                    f'**{self._config.current_count + 1}**.')
+            else:
+                await channel.send(f'I\'m now online!')
+
+        self.set_roles()
+
+    def set_roles(self):
+        """
+        Sets the `self.failed_role` and `self.reliable_counter_role` variables.
+        """
+        for member in self.get_all_members():
+            guild: discord.Guild = member.guild
+
+            # Set self.failed_role
+            if self._config.failed_role_id is not None:
+                self.failed_role = discord.utils.get(guild.roles, id=self._config.failed_role_id)
+            else:
+                self.failed_role = None
+
+            # Set self.reliable_counter_role
+            if self._config.reliable_counter_role_id is not None:
+                self.reliable_role = discord.utils.get(guild.roles, id=self._config.reliable_counter_role_id)
+            else:
+                self.reliable_role = None
+
+            break
+
+    async def add_remove_reliable_role(self, new_score: int, message: discord.Message):
+        """
+        Check the score and add or remove the reliable counter role.
+        """
+        if self.reliable_role is not None:
+
+            if new_score >= 100 and self.reliable_role not in message.author.roles:  # Add role if score >= 100
+                await message.author.add_roles(self.reliable_role)
+
+            if new_score < 100 and self.reliable_role in message.author.roles:  # Remove role if score < 100
+                await message.author.remove_roles(self.reliable_role)
+
+    async def add_remove_failed_role(self):
+        """
+        Adds the `self.failed_role` to the user whose id is stored in `self._config.failed_member_id`.
+        Removes the failed role from all other users.
+        Does not proceed if failed role has not been set.
+        If `self.failed_role` is not `None` but `self._config.failed_member_id` is `None`, then simply removes
+        the failed role from all members who have it currently.
+        """
+        if self.failed_role:
+            handled_member: bool = False
+
+            for member in self.failed_role.members:
+                # Iterate through members who have the failed role, and remove those who have not failed
+
+                if self._config.failed_member_id and self._config.failed_member_id == member.id:
+                    # Current failed member already has the failed role, so just continue
+                    handled_member = True
+                    continue
+                else:
+                    # Either failed_member_id is None, or this member is not the current failed member.
+                    # In either case, we have to remove the role.
+                    await member.remove_roles(self.failed_role)
+
+            if not handled_member and self._config.failed_member_id:
+                # Current failed member does not yet have the failed role
+                failed_member: discord.Member = await self.failed_role.guild.fetch_member(self._config.failed_member_id)
+                await failed_member.add_roles(self.failed_role)
+
+    async def schedule_busy_work(self):
+        await asyncio.sleep(5)
+        self._busy -= 1
+        if self._busy == 0:
+            self._config.dump_data()
+            await self.add_remove_failed_role()
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
         if message.author == self.user:
             return
 
-        config = Config.read()
-
         # Check if the message is in the channel
-        if message.channel.id != config.channel_id:
+        if message.channel.id != self._config.channel_id:
             return
 
         content: str = message.content
         if not all(c in POSSIBLE_CHARACTERS for c in content) or not any(char.isdigit() for char in content):
             return
 
+        self._busy += 1
         number: int = round(eval(content))
 
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
-        c.execute('SELECT * FROM members WHERE member_id = ?', (message.author.id,))
+        c.execute(f'SELECT score, highest_valid_count FROM members WHERE member_id = {message.author.id}')
         stats: tuple[int] = c.fetchone()
 
         if stats is None:
             score = 0
-            correct = 0
-            wrong = 0
             highest_valid_count = 0
-            c.execute('INSERT INTO members VALUES(?, ?, ?, ?, ?)',
-                    (message.author.id, score, correct, wrong, highest_valid_count))
+            c.execute(f'INSERT INTO members VALUES({message.author.id}, 0, 0, 0, 0)')
             conn.commit()
         else:
-            score = stats[1]
-            correct = stats[2]
-            wrong = stats[3]
-            highest_valid_count = stats[4]
+            score = stats[0]
+            highest_valid_count = stats[1]
 
+        # --------------
         # Wrong number
-        if int(number) != int(config.current_count)+1:
+        # --------------
+        if int(number) != int(self._config.current_count) + 1:
+
+            if self.failed_role:
+                self._config.failed_member_id = message.author.id  # Designate current user as failed member
+                # Adding/removing failed role is done when not busy
+
             await self.handle_wrong_count(message)
+
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
-                    (message.author.id,))
+                      (message.author.id,))
+
             conn.commit()
             conn.close()
+
+            # Check and add/remove reliable counter role
+            # TODO: defer until not busy?
+            score -= 1
+            await self.add_remove_reliable_role(score, message)
+
+            await self.schedule_busy_work()
+
             return
 
+        # -------------
         # Wrong member
-        if config.current_count and config.current_member_id == message.author.id:
+        # -------------
+        if self._config.current_count and self._config.current_member_id == message.author.id:
+
+            if self.failed_role:
+                self._config.failed_member_id = message.author.id  # Designate current user as failed member
+                # Adding/removing failed role is done when not busy
+
             await self.handle_wrong_member(message)
+
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
-                    (message.author.id,))
+                      (message.author.id,))
             conn.commit()
             conn.close()
+
+            # Check and add/remove reliable counter role
+            # TODO: defer until not busy?
+            score -= 1
+            await self.add_remove_reliable_role(score, message)
+
+            await self.schedule_busy_work()
+
             return
 
+        # --------------------
         # Everything is fine
-        config.increment(message.author.id)
+        # ---------------------
+        self._config.increment(message.author.id)  # config dump triggered at the end of the method
+
+        await message.add_reaction(self._config.reaction_emoji())  # config dumping done at the end of the method
+
         c.execute(f'''UPDATE members SET score = score + 1,
 correct = correct + 1
-{f", highest_valid_count  = {config.current_count}" if config.current_count > highest_valid_count else ""}
+{f", highest_valid_count  = {number}" if number > highest_valid_count else ""}
 WHERE member_id = ?''',
-                (message.author.id,))
+                  (message.author.id,))
         conn.commit()
         conn.close()
-        await message.add_reaction(config.reaction_emoji())
-        if config.reliable_counter_role_id is None:
-            return
-        reliable_counter_role = discord.utils.get(message.guild.roles,
-                                        id=config.reliable_counter_role_id)
-        if score + 1 >= 100 and reliable_counter_role not in message.author.roles:
-            await message.author.add_roles(reliable_counter_role)
-        # Check and remove the failed role
-        if config.failed_role_id is not None:
-            failed_role: discord.Role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
-            if failed_role in message.author.roles:
-                config.correct_inputs_by_failed_member += 1
-                if config.correct_inputs_by_failed_member >= 30:
-                    await message.author.remove_roles(failed_role)
-                    config.failed_member_id = None
-                    config.correct_inputs_by_failed_member = 0
-                config.update()
+
+        # Check and add/remove reliable counter role
+        # TODO: defer until not busy?
+        score += 1
+        await self.add_remove_reliable_role(score, message)
+
+        # Check and reset the self._config.failed_member_id to None.
+        # No need to remove the role itself, it will be done later when not busy
+        if self.failed_role and self._config.failed_member_id == message.author.id:
+            self._config.correct_inputs_by_failed_member += 1
+            if self._config.correct_inputs_by_failed_member >= 30:
+                self._config.failed_member_id = None
+                self._config.correct_inputs_by_failed_member = 0
+
+        await self.schedule_busy_work()
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         """Handles when someone messes up the count with a wrong number"""
-        config: Config = Config.read()
+
+        self._config.reset()  # config dump is triggered in on_message
+
         await message.channel.send(f'''{message.author.mention} messed up the count!\
-The correct number was {config.current_count + 1}
-Restart from **1** and try to beat the current high score of **{config.high_score}**!''')
+The correct number was {self._config.current_count + 1}
+Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
-        if config.failed_role_id is None:
-            config.reset()
-            return
-        failed_role: discord.Role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
-        if failed_role not in message.author.roles:
-            if config.failed_member_id is not None:
-                prev_failed_member: discord.Member = await message.guild.fetch_member(
-                    config.failed_member_id)
-                await prev_failed_member.remove_roles(failed_role)
-            await message.author.add_roles(failed_role)  # Add role to current user who has failed
-            config.failed_member_id = message.author.id  # Designate current user as failed member
-            config.update()
-        config.reset()
 
     async def handle_wrong_member(self, message: discord.Message) -> None:
-        """Handles when someone messes up the count counting twice"""
-        config: Config = Config.read()
+        """Handles when someone messes up the count by counting twice"""
+
+        self._config.reset()  # config dump is triggered in on_message
+
         await message.channel.send(f'''{message.author.mention} messed up the count!\
 You cannot count two numbers in a row!
-Restart from **1** and try to beat the current high score of **{config.high_score}**!''')
+Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
-        if config.failed_role_id is None:
-            config.reset()
-            return
-        failed_role = discord.utils.get(message.guild.roles, id=config.failed_role_id)
-        if failed_role not in message.author.roles:
-            if config.failed_member_id is not None:
-                prev_failed_member: discord.Member = await message.guild.fetch_member(
-                    config.failed_member_id)
-                await prev_failed_member.remove_roles(failed_role)
-            await message.author.add_roles(failed_role)  # Add role to current user who has failed
-            config.failed_member_id = message.author.id  # Designate current user as failed member
-            config.update()
-        config.reset()
-
 
     async def on_message_delete(self, message: discord.Message) -> None:
-        """Override the on_message_delete method"""
+        """Post a message in the channel if a user deletes their input."""
+
         if not self.is_ready():
             return
 
         if message.author == self.user:
             return
 
-        config = Config.read()
-
         # Check if the message is in the channel
-        if message.channel.id != config.channel_id:
+        if message.channel.id != self._config.channel_id:
             return
         if not message.reactions:
             return
         if not all(c in POSSIBLE_CHARACTERS for c in message.content):
             return
+
         await message.channel.send(
-f'{message.author.mention} deleted their number! The **next** number is **{config.current_count + 1}**.')
+            f'{message.author.mention} deleted their number! '
+            f'The **next** number is **{self._config.current_count + 1}**.')
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
-        """Override the on_message_edit method"""
+        """Send a message in the channel if a user modifies their input."""
+
         if not self.is_ready():
             return
 
         if before.author == self.user:
             return
 
-        config = Config.read()
-
         # Check if the message is in the channel
-        if before.channel.id != config.channel_id:
+        if before.channel.id != self._config.channel_id:
             return
         if not before.reactions:
             return
         if not all(c in POSSIBLE_CHARACTERS for c in before.content):
             return
+
         await after.channel.send(
-f'{after.author.mention} edited their number! The **next** number is **{config.current_count + 1}**.')
+            f'{after.author.mention} edited their number! The **next** number is **{self._config.current_count + 1}**.')
 
     async def setup_hook(self) -> None:
         await self.tree.sync()
@@ -272,6 +379,7 @@ f'{after.author.mention} edited their number! The **next** number is **{config.c
                 highest_valid_count INTEGER)''')
         conn.commit()
         conn.close()
+
 
 bot = Bot()
 
@@ -291,21 +399,23 @@ async def sync(interaction: discord.Interaction):
 @bot.tree.command(name='setchannel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 @app_commands.checks.has_permissions(ban_members=True)
-async def set_channel(interaction: discord.Interaction, channel:discord.TextChannel):
+async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     """Command to set the channel to count in"""
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
         return
     config = Config.read()
     config.channel_id = channel.id
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
     await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
+
 
 @bot.tree.command(name='listcmds', description='Lists commands')
 async def list_commands(interaction: discord.Interaction):
     """Command to list all the slash commands"""
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(),
-        description='''
+                        description='''
 **sync** - Syncs the slash commands to the bot (Admins only)
 **set_channel** - Sets the channel to count in (Admins only)
 **listcmds** - Lists all the slash commands
@@ -321,7 +431,7 @@ async def list_commands(interaction: discord.Interaction):
 
 @bot.tree.command(name='stats_user', description='Shows the user stats')
 @app_commands.describe(member='The member to get the stats for')
-async def stats_user(interaction:discord.Interaction, member: discord.Member = None):
+async def stats_user(interaction: discord.Interaction, member: discord.Member = None):
     """Command to show the stats of a specific user"""
     await interaction.response.defer()
     if member is None:
@@ -345,7 +455,7 @@ async def stats_user(interaction:discord.Interaction, member: discord.Member = N
 **✅Correct:** {stats[2]}
 **❌Wrong:** {stats[3]}
 **Highest valid count:** {stats[4]}\n
-**Correct rate:** {stats[1]/stats[2]*100:.2f}%'''
+**Correct rate:** {stats[1] / stats[2] * 100:.2f}%'''
     await interaction.followup.send(embed=emb)
 
 
@@ -354,9 +464,9 @@ async def server_stats(interaction: discord.Interaction):
     """Command to show the stats of the server"""
     config = Config.read()
 
-    # channel not seted yet
+    # channel not set yet
     if config.channel_id is None:
-        await interaction.response.send_message("counting channel not setted yet!")
+        await interaction.response.send_message("Counting channel not set yet!")
         return
 
     server_stats_embed = discord.Embed(
@@ -389,27 +499,32 @@ async def leaderboard(interaction: discord.Interaction):
 
     await interaction.followup.send(embed=emb)
 
+
 @bot.tree.command(name='set_failed_role',
-                description='Sets the role to be used when a user fails to count')
+                  description='Sets the role to be used when a user fails to count')
 @app_commands.describe(role='The role to be used when a user fails to count')
 @app_commands.default_permissions(ban_members=True)
 async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user fails to count"""
     config = Config.read()
     config.failed_role_id = role.id
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
+    bot.set_roles()  # Ask the bot to re-load the roles
     await interaction.response.send_message(f'Failed role was set to {role.mention}')
 
 
 @bot.tree.command(name='set_reliable_role',
-                description='Sets the role to be used when a user gets 100 of score')
+                  description='Sets the role to be used when a user gets 100 of score')
 @app_commands.describe(role='The role to be used when a user fails to count')
 @app_commands.default_permissions(ban_members=True)
 async def set_reliable_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user gets 100 of score"""
     config = Config.read()
     config.reliable_counter_role_id = role.id
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
+    bot.set_roles()  # Ask the bot to re-load the roles
     await interaction.response.send_message(f'Reliable role was set to {role.mention}')
 
 
@@ -418,7 +533,11 @@ async def set_reliable_role(interaction: discord.Interaction, role: discord.Role
 async def remove_failed_role(interaction: discord.Interaction):
     config = Config.read()
     config.failed_role_id = None
-    config.update()
+    config.failed_member_id = None
+    config.correct_inputs_by_failed_member = 0
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
+    bot.set_roles()  # Ask the bot to re-load the roles
     await interaction.response.send_message('Failed role removed')
 
 
@@ -427,7 +546,9 @@ async def remove_failed_role(interaction: discord.Interaction):
 async def remove_reliable_role(interaction: discord.Interaction):
     config = Config.read()
     config.reliable_counter_role_id = None
-    config.update()
+    config.dump_data()
+    bot.read_config()  # Explicitly ask the bot to re-read the config
+    bot.set_roles()  # Ask the bot to re-load the roles
     await interaction.response.send_message('Reliable role removed')
 
 
