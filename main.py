@@ -314,7 +314,7 @@ WHERE member_id = ?''',
 
         self._config.reset()  # config dump is triggered in on_message
 
-        await message.channel.send(f'''{message.author.mention} messed up the count!\
+        await message.channel.send(f'''{message.author.mention} messed up the count! \
 The correct number was {self._config.current_count + 1}
 Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
@@ -324,7 +324,7 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
 
         self._config.reset()  # config dump is triggered in on_message
 
-        await message.channel.send(f'''{message.author.mention} messed up the count!\
+        await message.channel.send(f'''{message.author.mention} messed up the count! \
 You cannot count two numbers in a row!
 Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
