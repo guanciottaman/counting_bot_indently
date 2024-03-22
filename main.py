@@ -463,17 +463,16 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
 @bot.tree.command(name="server_stats", description="View server counting stats")
 async def server_stats(interaction: discord.Interaction):
     """Command to show the stats of the server"""
-    config = Config.read()
+    # Use the bot's config variable, do not re-read file as it may be wrong
 
-    # channel not set yet
-    if config.channel_id is None:
+    if bot._config.channel_id is None:  # channel not set yet
         await interaction.response.send_message("Counting channel not set yet!")
         return
 
     server_stats_embed = discord.Embed(
-        description=f'''**Current Count**: {config.current_count}
-High Score: {config.high_score}
-{f"Last counted by: <@{config.current_member_id}>" if config.current_member_id else ""}''',
+        description=f'''**Current Count**: {bot._config.current_count}
+High Score: {bot._config.high_score}
+{f"Last counted by: <@{bot._config.current_member_id}>" if bot._config.current_member_id else ""}''',
         color=discord.Color.blurple()
     )
     server_stats_embed.set_author(name=interaction.guild, icon_url=interaction.guild.icon)
