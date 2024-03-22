@@ -311,11 +311,12 @@ WHERE member_id = ?''',
 
     async def handle_wrong_count(self, message: discord.Message) -> None:
         """Handles when someone messes up the count with a wrong number"""
+        correct_number: int = self._config.current_count + 1
 
         self._config.reset()  # config dump is triggered in on_message
 
         await message.channel.send(f'''{message.author.mention} messed up the count! \
-The correct number was {self._config.current_count + 1}
+The correct number was {correct_number}.
 Restart from **1** and try to beat the current high score of **{self._config.high_score}**!''')
         await message.add_reaction('❌')
 
@@ -462,10 +463,10 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
 @bot.tree.command(name="server_stats", description="View server counting stats")
 async def server_stats(interaction: discord.Interaction):
     """Command to show the stats of the server"""
-    config = Config.read()
+    # Use the bot's config variable, do not re-read file as it may not have been updated yet
+    config: Config = bot._config
 
-    # channel not set yet
-    if config.channel_id is None:
+    if config.channel_id is None:  # channel not set yet
         await interaction.response.send_message("Counting channel not set yet!")
         return
 
