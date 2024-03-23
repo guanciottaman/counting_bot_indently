@@ -188,8 +188,14 @@ class Bot(commands.Bot):
 
             if not handled_member and self._config.failed_member_id:
                 # Current failed member does not yet have the failed role
-                failed_member: discord.Member = await self.failed_role.guild.fetch_member(self._config.failed_member_id)
-                await failed_member.add_roles(self.failed_role)
+                try:
+                    failed_member: discord.Member = await self.failed_role.guild.fetch_member(self._config.failed_member_id)
+                    await failed_member.add_roles(self.failed_role)
+                except discord.NotFound:
+                    # Member is no longer in the server
+                    self._config.failed_member_id = None
+                    self._config.correct_inputs_by_failed_member = 0
+                    self._config.dump_data()
 
     async def schedule_busy_work(self):
         await asyncio.sleep(5)
