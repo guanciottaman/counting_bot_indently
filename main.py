@@ -367,6 +367,8 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
             return
         if not all(c in POSSIBLE_CHARACTERS for c in before.content):
             return
+        if before.content == after.content:
+            return
 
         await after.channel.send(
             f'{after.author.mention} edited their number! The **next** number is **{self._config.current_count + 1}**.')
