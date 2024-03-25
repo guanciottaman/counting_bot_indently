@@ -408,7 +408,7 @@ async def sync(interaction: discord.Interaction):
     await interaction.followup.send('Synced!')
 
 
-@bot.tree.command(name='setchannel', description='Sets the channel to count in')
+@bot.tree.command(name='set_channel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 @app_commands.checks.has_permissions(ban_members=True)
 async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
@@ -472,8 +472,8 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
     await interaction.followup.send(embed=emb)
 
 
-@bot.tree.command(name="server_stats", description="View server counting stats")
-async def server_stats(interaction: discord.Interaction):
+@bot.tree.command(name="stats_server", description="View server counting stats")
+async def stats_server(interaction: discord.Interaction):
     """Command to show the stats of the server"""
     # Use the bot's config variable, do not re-read file as it may not have been updated yet
     config: Config = bot._config
