@@ -200,6 +200,9 @@ class Bot(commands.Bot):
     async def schedule_busy_work(self):
         await asyncio.sleep(5)
         self._busy -= 1
+        await self.do_busy_work()
+
+    async def do_busy_work(self):
         if self._busy == 0:
             self._config.dump_data()
             await self.add_remove_failed_role()
@@ -405,7 +408,7 @@ async def sync(interaction: discord.Interaction):
     await interaction.followup.send('Synced!')
 
 
-@bot.tree.command(name='setchannel', description='Sets the channel to count in')
+@bot.tree.command(name='set_channel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
 @app_commands.checks.has_permissions(ban_members=True)
 async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
@@ -434,7 +437,8 @@ async def list_commands(interaction: discord.Interaction):
 **set_failed_role** - Sets the role to give when a user fails (Admins only)
 **set_reliable_role** - Sets the role to give when a user passes the score of 100 (Admins only)
 **remove_failed_role** - Removes the role to give when a user fails (Admins only)
-**remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)''')
+**remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)
+**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)''')
     await interaction.response.send_message(embed=emb)
 
 
@@ -468,8 +472,8 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
     await interaction.followup.send(embed=emb)
 
 
-@bot.tree.command(name="server_stats", description="View server counting stats")
-async def server_stats(interaction: discord.Interaction):
+@bot.tree.command(name="stats_server", description="View server counting stats")
+async def stats_server(interaction: discord.Interaction):
     """Command to show the stats of the server"""
     # Use the bot's config variable, do not re-read file as it may not have been updated yet
     config: Config = bot._config
@@ -569,6 +573,14 @@ async def disconnect(interaction: discord.Interaction):
         channel = bot.get_channel(config.channel_id)
         await channel.send('Bot is now offline.')
     await bot.close()
+
+
+@bot.tree.command(name='force_dump', description='Forcibly dumps configuration data')
+@app_commands.default_permissions(ban_members=True)
+async def force_dump(interaction: discord.Interaction):
+    bot._busy = 0
+    await bot.do_busy_work()
+    await interaction.response.send_message('Configuration data successfully dumped.')
 
 
 if __name__ == '__main__':
