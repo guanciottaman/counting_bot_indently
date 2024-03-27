@@ -476,7 +476,7 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
     stats = c.fetchone()
 
     if stats is None:
-        await interaction.response.send_message('You have never counted in this server!')
+        await interaction.followup.send('You have never counted in this server!')
         conn.close()
         return
 
