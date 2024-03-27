@@ -102,6 +102,7 @@ class Bot(commands.Bot):
         intents.members = True
         self._config: Config = Config.read()
         self._busy: int = 0
+        self.participating_users: Optional[set[int]] = None
         self.failed_role: Optional[discord.Role] = None
         self.reliable_role: Optional[discord.Role] = None
         super().__init__(command_prefix='!', intents=intents)
@@ -151,17 +152,39 @@ class Bot(commands.Bot):
 
             break
 
-    async def add_remove_reliable_role(self, new_score: int, message: discord.Message):
+    async def add_remove_reliable_role(self):
         """
-        Check the score and add or remove the reliable counter role.
+        Adds/removes the reliable role from participating users.
+
+        Criteria for getting the reliable role:
+        1. Accuracy must be > 99%. (Accuracy = correct / (correct + wrong))
+        2. Must have >= 100 correct inputs.
         """
-        if self.reliable_role is not None:
+        if self.reliable_role and self.participating_users:
 
-            if new_score >= 100 and self.reliable_role not in message.author.roles:  # Add role if score >= 100
-                await message.author.add_roles(self.reliable_role)
+            conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
+            cursor: sqlite3.Cursor = conn.cursor()
 
-            if new_score < 100 and self.reliable_role in message.author.roles:  # Remove role if score < 100
-                await message.author.remove_roles(self.reliable_role)
+            for user_id in self.participating_users:
+
+                try:
+                    member: discord.Member = await self.reliable_role.guild.fetch_member(user_id)
+                    cursor.execute(f'SELECT correct, wrong FROM members WHERE member_id = {user_id}')
+                    stats: Optional[tuple[int]] = cursor.fetchone()
+
+                    if stats:
+                        accuracy: float = stats[0] / (stats[0] + stats[1])
+
+                        if accuracy > 0.990 and stats[0] >= 100:
+                            await member.add_roles(self.reliable_role)
+                        else:
+                            await member.remove_roles(self.reliable_role)
+
+                except discord.NotFound:
+                    # Member no longer in the server
+                    continue
+
+            self.participating_users = None
 
     async def add_remove_failed_role(self):
         """
@@ -206,6 +229,7 @@ class Bot(commands.Bot):
         if self._busy == 0:
             self._config.dump_data()
             await self.add_remove_failed_role()
+            await self.add_remove_reliable_role()
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
@@ -223,19 +247,22 @@ class Bot(commands.Bot):
         self._busy += 1
         number: int = round(eval(content))
 
+        if self.participating_users is None:
+            self.participating_users = {message.author.id, }
+        else:
+            self.participating_users.add(message.author.id)
+
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
-        c.execute(f'SELECT score, highest_valid_count FROM members WHERE member_id = {message.author.id}')
-        stats: tuple[int] = c.fetchone()
+        c.execute(f'SELECT highest_valid_count FROM members WHERE member_id = {message.author.id}')
+        stats: Optional[tuple[int]] = c.fetchone()
 
         if stats is None:
-            score = 0
             highest_valid_count = 0
             c.execute(f'INSERT INTO members VALUES({message.author.id}, 0, 0, 0, 0)')
             conn.commit()
         else:
-            score = stats[0]
-            highest_valid_count = stats[1]
+            highest_valid_count = stats[0]
 
         # --------------
         # Wrong number
@@ -253,11 +280,6 @@ class Bot(commands.Bot):
 
             conn.commit()
             conn.close()
-
-            # Check and add/remove reliable counter role
-            # TODO: defer until not busy?
-            score -= 1
-            await self.add_remove_reliable_role(score, message)
 
             await self.schedule_busy_work()
 
@@ -279,11 +301,6 @@ class Bot(commands.Bot):
             conn.commit()
             conn.close()
 
-            # Check and add/remove reliable counter role
-            # TODO: defer until not busy?
-            score -= 1
-            await self.add_remove_reliable_role(score, message)
-
             await self.schedule_busy_work()
 
             return
@@ -302,11 +319,6 @@ WHERE member_id = ?''',
                   (message.author.id,))
         conn.commit()
         conn.close()
-
-        # Check and add/remove reliable counter role
-        # TODO: defer until not busy?
-        score += 1
-        await self.add_remove_reliable_role(score, message)
 
         # Check and reset the self._config.failed_member_id to None.
         # No need to remove the role itself, it will be done later when not busy
@@ -438,7 +450,8 @@ async def list_commands(interaction: discord.Interaction):
 **set_reliable_role** - Sets the role to give when a user passes the score of 100 (Admins only)
 **remove_failed_role** - Removes the role to give when a user fails (Admins only)
 **remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)
-**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)''')
+**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)
+**prune** - Remove data for users who are no longer in the server. (Admins only)''')
     await interaction.response.send_message(embed=emb)
 
 
@@ -447,28 +460,34 @@ async def list_commands(interaction: discord.Interaction):
 async def stats_user(interaction: discord.Interaction, member: discord.Member = None):
     """Command to show the stats of a specific user"""
     await interaction.response.defer()
+
     if member is None:
         member = interaction.user
+
     emb = discord.Embed(title=f'{member.display_name}\'s stats', color=discord.Color.blue())
+
     conn = sqlite3.connect('database.sqlite3')
     c = conn.cursor()
+
     c.execute('SELECT * FROM members WHERE member_id = ?', (member.id,))
     stats = c.fetchone()
+
     if stats is None:
         await interaction.response.send_message('You have never counted in this server!')
         conn.close()
         return
-    c.execute(f'SELECT score FROM members WHERE member_id = {member.id}')
-    score = c.fetchone()[0]
-    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {score}')
+
+    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {stats[1]}')
     position = c.fetchone()[0]
     conn.close()
+
     emb.description = f'''{member.mention}\'s stats:\n
 **Score:** {stats[1]} (#{position})
 **✅Correct:** {stats[2]}
 **❌Wrong:** {stats[3]}
 **Highest valid count:** {stats[4]}\n
-**Correct rate:** {stats[1] / stats[2] * 100:.2f}%'''
+**Accuracy:** {(stats[2] / (stats[2] + stats[3])) * 100:.2f}%'''
+
     await interaction.followup.send(embed=emb)
 
 
@@ -581,6 +600,39 @@ async def force_dump(interaction: discord.Interaction):
     bot._busy = 0
     await bot.do_busy_work()
     await interaction.response.send_message('Configuration data successfully dumped.')
+
+
+@bot.tree.command(name='prune', description='(DANGER) Deletes data of users who are no longer in the server')
+@app_commands.default_permissions(ban_members=True)
+async def prune(interaction: discord.Interaction):
+
+    conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
+    cursor: sqlite3.Cursor = conn.cursor()
+
+    cursor.execute('SELECT member_id FROM members')
+    result: Optional[list[tuple[int]]] = cursor.fetchall()
+
+    if result:
+        count: int = 0
+
+        for res in result:
+            user_id: int = res[0]
+
+            if interaction.guild.get_member(user_id) is None:
+                cursor.execute(f'DELETE FROM members WHERE member_id = {user_id}')
+                count += 1
+                print(f'Removed data for user {user_id}.')
+
+        if count > 0:
+            conn.commit()
+            await interaction.response.send_message(f'Successfully removed data for {count} user(s).')
+        else:
+            await interaction.response.send_message('No users met the criteria to be removed.')
+
+    else:
+        await interaction.response.send_message('No users found in the database.')
+
+    conn.close()
 
 
 if __name__ == '__main__':
