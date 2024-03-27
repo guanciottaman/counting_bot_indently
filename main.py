@@ -182,7 +182,7 @@ class Bot(commands.Bot):
 
                 except discord.NotFound:
                     # Member no longer in the server
-                    pass
+                    continue
 
             self.participating_users = None
 
@@ -460,28 +460,34 @@ async def list_commands(interaction: discord.Interaction):
 async def stats_user(interaction: discord.Interaction, member: discord.Member = None):
     """Command to show the stats of a specific user"""
     await interaction.response.defer()
+
     if member is None:
         member = interaction.user
+
     emb = discord.Embed(title=f'{member.display_name}\'s stats', color=discord.Color.blue())
+
     conn = sqlite3.connect('database.sqlite3')
     c = conn.cursor()
+
     c.execute('SELECT * FROM members WHERE member_id = ?', (member.id,))
     stats = c.fetchone()
+
     if stats is None:
         await interaction.response.send_message('You have never counted in this server!')
         conn.close()
         return
-    c.execute(f'SELECT score FROM members WHERE member_id = {member.id}')
-    score = c.fetchone()[0]
-    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {score}')
+
+    c.execute(f'SELECT COUNT(member_id) FROM members WHERE score >= {stats[1]}')
     position = c.fetchone()[0]
     conn.close()
+
     emb.description = f'''{member.mention}\'s stats:\n
 **Score:** {stats[1]} (#{position})
 **✅Correct:** {stats[2]}
 **❌Wrong:** {stats[3]}
 **Highest valid count:** {stats[4]}\n
-**Correct rate:** {stats[1] / stats[2] * 100:.2f}%'''
+**Accuracy:** {(stats[2] / (stats[2] + stats[3])) * 100:.2f}%'''
+
     await interaction.followup.send(embed=emb)
 
 
