@@ -102,7 +102,7 @@ class Bot(commands.Bot):
         intents.members = True
         self._config: Config = Config.read()
         self._busy: int = 0
-        self.participating_users: Optional[set[int]] = None
+        self._participating_users: Optional[set[int]] = None
         self.failed_role: Optional[discord.Role] = None
         self.reliable_role: Optional[discord.Role] = None
         super().__init__(command_prefix='!', intents=intents)
@@ -158,33 +158,36 @@ class Bot(commands.Bot):
 
         Criteria for getting the reliable role:
         1. Accuracy must be > 99%. (Accuracy = correct / (correct + wrong))
-        2. Must have >= 100 correct inputs.
+        2. Must have score >= 100.
         """
-        if self.reliable_role and self.participating_users:
+        if self.reliable_role and self._participating_users:
 
             conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
             cursor: sqlite3.Cursor = conn.cursor()
 
-            for user_id in self.participating_users:
+            # Make a copy of the set to prevent runtime errors if the set changes while execution
+            users: set[int] = self._participating_users.copy()
+            self._participating_users = None
 
-                try:
-                    member: discord.Member = await self.reliable_role.guild.fetch_member(user_id)
-                    cursor.execute(f'SELECT correct, wrong FROM members WHERE member_id = {user_id}')
-                    stats: Optional[tuple[int]] = cursor.fetchone()
+            if len(users) == 1:
+                sql_stmt: str = f'SELECT member_id, correct, wrong FROM members WHERE member_id = {tuple(users)[0]}'
+            else:
+                sql_stmt: str = f'SELECT member_id, correct, wrong FROM members WHERE member_id IN {tuple(users)}'
 
-                    if stats:
-                        accuracy: float = stats[0] / (stats[0] + stats[1])
+            cursor.execute(sql_stmt)
+            result: Optional[list[tuple[int]]] = cursor.fetchall()
+            conn.close()
 
-                        if accuracy > 0.990 and stats[0] - stats[1] >= 100:
+            if result:
+                for data in result:
+                    member: Optional[discord.Member] = self.reliable_role.guild.get_member(data[0])
+                    if member:
+                        accuracy: float = data[1] / (data[1] + data[2])
+
+                        if accuracy > 0.990 and data[1] - data[2] >= 100:
                             await member.add_roles(self.reliable_role)
                         else:
                             await member.remove_roles(self.reliable_role)
-
-                except discord.NotFound:
-                    # Member no longer in the server
-                    continue
-
-            self.participating_users = None
 
     async def add_remove_failed_role(self):
         """
@@ -247,10 +250,10 @@ class Bot(commands.Bot):
         self._busy += 1
         number: int = round(eval(content))
 
-        if self.participating_users is None:
-            self.participating_users = {message.author.id, }
+        if self._participating_users is None:
+            self._participating_users = {message.author.id, }
         else:
-            self.participating_users.add(message.author.id)
+            self._participating_users.add(message.author.id)
 
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
@@ -473,7 +476,7 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
     stats = c.fetchone()
 
     if stats is None:
-        await interaction.response.send_message('You have never counted in this server!')
+        await interaction.followup.send('You have never counted in this server!')
         conn.close()
         return
 
