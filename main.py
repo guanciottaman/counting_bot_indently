@@ -102,6 +102,7 @@ class Bot(commands.Bot):
         intents.members = True
         self._config: Config = Config.read()
         self._busy: int = 0
+        self.participating_users: Optional[set[int]] = None
         self.failed_role: Optional[discord.Role] = None
         self.reliable_role: Optional[discord.Role] = None
         super().__init__(command_prefix='!', intents=intents)
@@ -151,17 +152,39 @@ class Bot(commands.Bot):
 
             break
 
-    async def add_remove_reliable_role(self, new_score: int, message: discord.Message):
+    async def add_remove_reliable_role(self):
         """
-        Check the score and add or remove the reliable counter role.
+        Adds/removes the reliable role from participating users.
+
+        Criteria for getting the reliable role:
+        1. Accuracy must be > 99%. (Accuracy = correct / (correct + wrong))
+        2. Must have >= 100 correct inputs.
         """
-        if self.reliable_role is not None:
+        if self.reliable_role and self.participating_users:
 
-            if new_score >= 100 and self.reliable_role not in message.author.roles:  # Add role if score >= 100
-                await message.author.add_roles(self.reliable_role)
+            conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
+            cursor: sqlite3.Cursor = conn.cursor()
 
-            if new_score < 100 and self.reliable_role in message.author.roles:  # Remove role if score < 100
-                await message.author.remove_roles(self.reliable_role)
+            for user_id in self.participating_users:
+
+                try:
+                    member: discord.Member = await self.reliable_role.guild.fetch_member(user_id)
+                    cursor.execute(f'SELECT correct, wrong FROM members WHERE member_id = {user_id}')
+                    stats: Optional[tuple[int]] = cursor.fetchone()
+
+                    if stats:
+                        accuracy: float = stats[0] / (stats[0] + stats[1])
+
+                        if accuracy > 0.990 and stats[0] >= 100:
+                            await member.add_roles(self.reliable_role)
+                        else:
+                            await member.remove_roles(self.reliable_role)
+
+                except discord.NotFound:
+                    # Member no longer in the server
+                    pass
+
+            self.participating_users = None
 
     async def add_remove_failed_role(self):
         """
@@ -206,6 +229,7 @@ class Bot(commands.Bot):
         if self._busy == 0:
             self._config.dump_data()
             await self.add_remove_failed_role()
+            await self.add_remove_reliable_role()
 
     async def on_message(self, message: discord.Message) -> None:
         """Override the on_message method"""
@@ -223,19 +247,22 @@ class Bot(commands.Bot):
         self._busy += 1
         number: int = round(eval(content))
 
+        if self.participating_users is None:
+            self.participating_users = {message.author.id, }
+        else:
+            self.participating_users.add(message.author.id)
+
         conn = sqlite3.connect('database.sqlite3')
         c = conn.cursor()
-        c.execute(f'SELECT score, highest_valid_count FROM members WHERE member_id = {message.author.id}')
-        stats: tuple[int] = c.fetchone()
+        c.execute(f'SELECT highest_valid_count FROM members WHERE member_id = {message.author.id}')
+        stats: Optional[tuple[int]] = c.fetchone()
 
         if stats is None:
-            score = 0
             highest_valid_count = 0
             c.execute(f'INSERT INTO members VALUES({message.author.id}, 0, 0, 0, 0)')
             conn.commit()
         else:
-            score = stats[0]
-            highest_valid_count = stats[1]
+            highest_valid_count = stats[0]
 
         # --------------
         # Wrong number
@@ -253,11 +280,6 @@ class Bot(commands.Bot):
 
             conn.commit()
             conn.close()
-
-            # Check and add/remove reliable counter role
-            # TODO: defer until not busy?
-            score -= 1
-            await self.add_remove_reliable_role(score, message)
 
             await self.schedule_busy_work()
 
@@ -279,11 +301,6 @@ class Bot(commands.Bot):
             conn.commit()
             conn.close()
 
-            # Check and add/remove reliable counter role
-            # TODO: defer until not busy?
-            score -= 1
-            await self.add_remove_reliable_role(score, message)
-
             await self.schedule_busy_work()
 
             return
@@ -302,11 +319,6 @@ WHERE member_id = ?''',
                   (message.author.id,))
         conn.commit()
         conn.close()
-
-        # Check and add/remove reliable counter role
-        # TODO: defer until not busy?
-        score += 1
-        await self.add_remove_reliable_role(score, message)
 
         # Check and reset the self._config.failed_member_id to None.
         # No need to remove the role itself, it will be done later when not busy
