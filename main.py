@@ -175,7 +175,7 @@ class Bot(commands.Bot):
                     if stats:
                         accuracy: float = stats[0] / (stats[0] + stats[1])
 
-                        if accuracy > 0.990 and stats[0] >= 100:
+                        if accuracy > 0.990 and stats[0] - stats[1] >= 100:
                             await member.add_roles(self.reliable_role)
                         else:
                             await member.remove_roles(self.reliable_role)
