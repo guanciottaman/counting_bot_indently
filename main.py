@@ -450,7 +450,8 @@ async def list_commands(interaction: discord.Interaction):
 **set_reliable_role** - Sets the role to give when a user passes the score of 100 (Admins only)
 **remove_failed_role** - Removes the role to give when a user fails (Admins only)
 **remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)
-**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)''')
+**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)
+**prune** - Remove data for users who are no longer in the server. (Admins only)''')
     await interaction.response.send_message(embed=emb)
 
 
@@ -593,6 +594,39 @@ async def force_dump(interaction: discord.Interaction):
     bot._busy = 0
     await bot.do_busy_work()
     await interaction.response.send_message('Configuration data successfully dumped.')
+
+
+@bot.tree.command(name='prune', description='(DANGER) Deletes data of users who are no longer in the server')
+@app_commands.default_permissions(ban_members=True)
+async def prune(interaction: discord.Interaction):
+
+    conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
+    cursor: sqlite3.Cursor = conn.cursor()
+
+    cursor.execute('SELECT member_id FROM members')
+    result: Optional[list[tuple[int]]] = cursor.fetchall()
+
+    if result:
+        count: int = 0
+
+        for res in result:
+            user_id: int = res[0]
+
+            if interaction.guild.get_member(user_id) is None:
+                cursor.execute(f'DELETE FROM members WHERE member_id = {user_id}')
+                count += 1
+                print(f'Removed data for user {user_id}.')
+
+        if count > 0:
+            conn.commit()
+            await interaction.response.send_message(f'Successfully removed data for {count} user(s).')
+        else:
+            await interaction.response.send_message('No users met the criteria to be removed.')
+
+    else:
+        await interaction.response.send_message('No users found in the database.')
+
+    conn.close()
 
 
 if __name__ == '__main__':
