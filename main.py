@@ -182,9 +182,9 @@ class Bot(commands.Bot):
                 for data in result:
                     member: Optional[discord.Member] = self.reliable_role.guild.get_member(data[0])
                     if member:
-                        accuracy: float = data[1] / (data[1] + data[2])
+                        accuracy: float = (data[1] / (data[1] + data[2])) * 100
 
-                        if accuracy > 0.990 and data[1] - data[2] >= 100:
+                        if float(f'{accuracy:.2f}') >= 99.00 and data[1] - data[2] >= 100:
                             await member.add_roles(self.reliable_role)
                         else:
                             await member.remove_roles(self.reliable_role)
