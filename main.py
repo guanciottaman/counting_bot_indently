@@ -247,8 +247,14 @@ class Bot(commands.Bot):
         if not all(c in POSSIBLE_CHARACTERS for c in content) or not any(char.isdigit() for char in content):
             return
 
+        try:
+            number: int = round(eval(content))
+        except SyntaxError:
+            return
+        except ZeroDivisionError:
+            return
+
         self._busy += 1
-        number: int = round(eval(content))
 
         if self._participating_users is None:
             self._participating_users = {message.author.id, }
