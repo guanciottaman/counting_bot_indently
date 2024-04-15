@@ -606,9 +606,11 @@ async def disconnect(interaction: discord.Interaction):
 @bot.tree.command(name='force_dump', description='Forcibly dumps configuration data')
 @app_commands.default_permissions(ban_members=True)
 async def force_dump(interaction: discord.Interaction):
+    await interaction.response.defer()
     bot._busy = 0
     await bot.do_busy_work()
-    await interaction.response.send_message('Configuration data successfully dumped.')
+    emb = discord.Embed(description=f'✅ Configuration data successfully dumped.')
+    await interaction.followup.send(embed=emb)
 
 
 @bot.tree.command(name='prune', description='(DANGER) Deletes data of users who are no longer in the server')
