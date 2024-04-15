@@ -444,24 +444,31 @@ async def set_channel(interaction: discord.Interaction, channel: discord.TextCha
     await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
 
 
-@bot.tree.command(name='listcmds', description='Lists commands')
-async def list_commands(interaction: discord.Interaction):
+@bot.tree.command(name='list_commands', description='Lists commands')
+@app_commands.describe(ephemeral='Whether the output should be ephemeral')
+async def list_commands(interaction: discord.Interaction, ephemeral: bool = True):
     """Command to list all the slash commands"""
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(),
                         description='''
-**sync** - Syncs the slash commands to the bot (Admins only)
-**set_channel** - Sets the channel to count in (Admins only)
 **listcmds** - Lists all the slash commands
 **stats_user** - Shows the stats of a specific user
 **stats_server** - Shows the stats of the server
-**leaderboard** - Shows the leaderboard of the server
-**set_failed_role** - Sets the role to give when a user fails (Admins only)
-**set_reliable_role** - Sets the role to give when a user passes the score of 100 (Admins only)
-**remove_failed_role** - Removes the role to give when a user fails (Admins only)
-**remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)
-**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)
-**prune** - Remove data for users who are no longer in the server. (Admins only)''')
-    await interaction.response.send_message(embed=emb)
+**leaderboard** - Shows the leaderboard of the server''')
+
+    if interaction.user.guild_permissions.ban_members:
+        emb.description += '''\n
+__Restricted commands__ (Admin-only)
+**sync** - Syncs the slash commands to the bot
+**set_channel** - Sets the channel to count in
+**set_failed_role** - Sets the role to give when a user fails
+**set_reliable_role** - Sets the role to give when a user passes the score of 100
+**remove_failed_role** - Removes the role to give when a user fails
+**remove_reliable_role** - Removes the role to give when a user passes the score of 100
+**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing.
+**prune** - Remove data for users who are no longer in the server.
+'''
+
+    await interaction.response.send_message(embed=emb, ephemeral=ephemeral)
 
 
 @bot.tree.command(name='stats_user', description='Shows the user stats')
