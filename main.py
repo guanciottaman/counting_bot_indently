@@ -247,12 +247,16 @@ class Bot(commands.Bot):
         if not all(c in POSSIBLE_CHARACTERS for c in content) or not any(char.isdigit() for char in content):
             return
 
+        zero_division: bool = False
+
         try:
             number: int = round(eval(content))
         except SyntaxError:
+            await message.add_reaction('⚠️')
+            await message.channel.send(f'Syntax error in mathematical expression!\nThe chain has **not** been broken.')
             return
         except ZeroDivisionError:
-            return
+            zero_division = True
 
         self._busy += 1
 
@@ -273,6 +277,25 @@ class Bot(commands.Bot):
         else:
             highest_valid_count = stats[0]
 
+        # -------------
+        # Wrong member
+        # -------------
+        if zero_division or (self._config.current_count and self._config.current_member_id == message.author.id):
+
+            if self.failed_role:
+                self._config.failed_member_id = message.author.id  # Designate current user as failed member
+                # Adding/removing failed role is done when not busy
+
+            await self.handle_wrong_member(message)
+
+            c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
+                      (message.author.id,))
+            conn.commit()
+            conn.close()
+
+            await self.schedule_busy_work()
+            return
+
         # --------------
         # Wrong number
         # --------------
@@ -287,26 +310,6 @@ class Bot(commands.Bot):
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
                       (message.author.id,))
 
-            conn.commit()
-            conn.close()
-
-            await self.schedule_busy_work()
-
-            return
-
-        # -------------
-        # Wrong member
-        # -------------
-        if self._config.current_count and self._config.current_member_id == message.author.id:
-
-            if self.failed_role:
-                self._config.failed_member_id = message.author.id  # Designate current user as failed member
-                # Adding/removing failed role is done when not busy
-
-            await self.handle_wrong_member(message)
-
-            c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
-                      (message.author.id,))
             conn.commit()
             conn.close()
 
@@ -616,7 +619,7 @@ async def force_dump(interaction: discord.Interaction):
     await interaction.response.defer()
     bot._busy = 0
     await bot.do_busy_work()
-    emb = discord.Embed(description=f'✅ Configuration data successfully dumped.')
+    emb = discord.Embed(description=f'✅ Configuration data successfully dumped.', colour=discord.Colour.og_blurple())
     await interaction.followup.send(embed=emb)
 
 
