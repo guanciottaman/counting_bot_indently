@@ -450,7 +450,7 @@ async def list_commands(interaction: discord.Interaction, ephemeral: bool = True
     """Command to list all the slash commands"""
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(),
                         description='''
-**listcmds** - Lists all the slash commands
+**list_commands** - Lists all the slash commands
 **stats_user** - Shows the stats of a specific user
 **stats_server** - Shows the stats of the server
 **leaderboard** - Shows the leaderboard of the server''')
@@ -461,9 +461,9 @@ __Restricted commands__ (Admin-only)
 **sync** - Syncs the slash commands to the bot
 **set_channel** - Sets the channel to count in
 **set_failed_role** - Sets the role to give when a user fails
-**set_reliable_role** - Sets the role to give when a user passes the score of 100
-**remove_failed_role** - Removes the role to give when a user fails
-**remove_reliable_role** - Removes the role to give when a user passes the score of 100
+**set_reliable_role** - Sets the reliable role
+**remove_failed_role** - Unsets the role to give when a user fails
+**remove_reliable_role** - Unsets the reliable role
 **force_dump** - Forcibly dump bot config data. Use only when no one is actively playing.
 **prune** - Remove data for users who are no longer in the server.
 '''
@@ -652,6 +652,35 @@ async def prune(interaction: discord.Interaction):
 
     conn.close()
 
+
+@bot.tree.command(name='calc', description='Evaluate a mathematical expression')
+@app_commands.describe(expression='The mathematical expression to be evaluated')
+async def calc(interaction: discord.Interaction, expression: str) -> None:
+    await interaction.response.defer()
+
+    emb: discord.Embed = discord.Embed(description='')
+
+    if not all(c in POSSIBLE_CHARACTERS for c in expression) or not any(char.isdigit() for char in expression):
+        emb.description = f'**Expression:** `{expression}`\n\n❌ Invalid mathematical expression!'
+        emb.colour = discord.Colour.brand_red()
+        await interaction.followup.send(embed=emb)
+        return
+
+    try:
+        number: int = round(eval(expression))
+        emb.description = f'**Expression:** `{expression}`\n\n**Result:** `{number}`'
+        emb.colour = discord.Colour.brand_green()
+        await interaction.followup.send(embed=emb)
+    except SyntaxError:
+        emb.description = f'**Expression:** `{expression}`\n\n❌ Invalid mathematical expression!'
+        emb.colour = discord.Colour.brand_red()
+        await interaction.followup.send(embed=emb)
+        return
+    except ZeroDivisionError:
+        emb.description = f'**Expression:** `{expression}`\n\n❌ Division by zero!'
+        emb.colour = discord.Colour.brand_red()
+        await interaction.followup.send(embed=emb)
+        return
 
 if __name__ == '__main__':
     bot.run(TOKEN)
