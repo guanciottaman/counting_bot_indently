@@ -465,11 +465,12 @@ async def set_channel(interaction: discord.Interaction, channel: discord.TextCha
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
         return
+    await interaction.response.defer()
     config = Config.read()
     config.channel_id = channel.id
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
-    await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
+    await interaction.followup.send(f'Counting channel was set to {channel.mention}')
 
 
 @bot.tree.command(name='list_commands', description='Lists commands')
@@ -538,28 +539,30 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
 @bot.tree.command(name="stats_server", description="View server counting stats")
 async def stats_server(interaction: discord.Interaction):
     """Command to show the stats of the server"""
+    await interaction.response.defer()
+
     # Use the bot's config variable, do not re-read file as it may not have been updated yet
     config: Config = bot._config
 
     if config.channel_id is None:  # channel not set yet
-        await interaction.response.send_message("Counting channel not set yet!")
+        await interaction.followup.send("Counting channel not set yet!")
         return
 
-    server_stats_embed = discord.Embed(
-        description=f'''**Current Count**: {config.current_count}
+    server_stats_embed = discord.Embed(description=f'''**Current Count**: {config.current_count}
 High Score: {config.high_score}
 {f"Last counted by: <@{config.current_member_id}>" if config.current_member_id else ""}''',
         color=discord.Color.blurple()
     )
     server_stats_embed.set_author(name=interaction.guild, icon_url=interaction.guild.icon)
 
-    await interaction.response.send_message(embed=server_stats_embed)
+    await interaction.followup.send(embed=server_stats_embed)
 
 
 @bot.tree.command(name='leaderboard', description='Shows the first 10 users with the highest score')
 async def leaderboard(interaction: discord.Interaction):
     """Command to show the top 10 users with the highest score in Indently"""
     await interaction.response.defer()
+
     emb = discord.Embed(title='Top 10 users in Indently',
                         color=discord.Color.blue(), description='')
 
@@ -582,12 +585,13 @@ async def leaderboard(interaction: discord.Interaction):
 @app_commands.default_permissions(ban_members=True)
 async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user fails to count"""
+    await interaction.response.defer()
     config = Config.read()
     config.failed_role_id = role.id
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message(f'Failed role was set to {role.mention}')
+    await interaction.followup.send(f'Failed role was set to {role.mention}.')
 
 
 @bot.tree.command(name='set_reliable_role',
@@ -596,17 +600,19 @@ async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
 @app_commands.default_permissions(ban_members=True)
 async def set_reliable_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user gets 100 of score"""
+    await interaction.response.defer()
     config = Config.read()
     config.reliable_counter_role_id = role.id
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message(f'Reliable role was set to {role.mention}')
+    await interaction.followup.send(f'Reliable role was set to {role.mention}.')
 
 
 @bot.tree.command(name='remove_failed_role', description='Removes the failed role feature')
 @app_commands.default_permissions(ban_members=True)
 async def remove_failed_role(interaction: discord.Interaction):
+    await interaction.response.defer()
     config = Config.read()
     config.failed_role_id = None
     config.failed_member_id = None
@@ -614,18 +620,19 @@ async def remove_failed_role(interaction: discord.Interaction):
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message('Failed role removed')
+    await interaction.followup.send('Failed role removed.')
 
 
 @bot.tree.command(name='remove_reliable_role', description='Removes the reliable role feature')
 @app_commands.default_permissions(ban_members=True)
 async def remove_reliable_role(interaction: discord.Interaction):
+    await interaction.response.defer()
     config = Config.read()
     config.reliable_counter_role_id = None
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message('Reliable role removed')
+    await interaction.followup.send('Reliable role removed.')
 
 
 @bot.tree.command(name='disconnect', description='Makes the bot go offline')
@@ -650,6 +657,7 @@ async def force_dump(interaction: discord.Interaction):
 @bot.tree.command(name='prune', description='(DANGER) Deletes data of users who are no longer in the server')
 @app_commands.default_permissions(ban_members=True)
 async def prune(interaction: discord.Interaction):
+    await interaction.response.defer()
 
     conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
     cursor: sqlite3.Cursor = conn.cursor()
@@ -670,12 +678,12 @@ async def prune(interaction: discord.Interaction):
 
         if count > 0:
             conn.commit()
-            await interaction.response.send_message(f'Successfully removed data for {count} user(s).')
+            await interaction.followup.send(f'Successfully removed data for {count} user(s).')
         else:
-            await interaction.response.send_message('No users met the criteria to be removed.')
+            await interaction.followup.send('No users met the criteria to be removed.')
 
     else:
-        await interaction.response.send_message('No users found in the database.')
+        await interaction.followup.send('No users found in the database.')
 
     conn.close()
 
