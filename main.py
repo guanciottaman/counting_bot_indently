@@ -118,18 +118,43 @@ class Bot(commands.Bot):
         """Override the on_ready method"""
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
 
-        if self._config.channel_id is not None:
-            channel = bot.get_channel(self._config.channel_id)
+        busy_work_necessary: bool = False
 
-            if self._config.current_member_id is not None:
-                member = await channel.guild.fetch_member(self._config.current_member_id)
-                await channel.send(
-                    f'I\'m now online! Last counted by {member.mention}. The **next** number is '
-                    f'**{self._config.current_count + 1}**.')
-            else:
-                await channel.send(f'I\'m now online!')
+        if self._config.channel_id:
+
+            channel: Optional[discord.TextChannel] = bot.get_channel(self._config.channel_id)
+            if channel:  # It is possible that the channel was removed, so check if channel exists
+
+                emb: discord.Embed = discord.Embed(description=':green_circle:  **I\'m now online!**',
+                                                   colour=discord.Color.brand_green())
+
+                if self._config.high_score > 0:
+                    emb.description += (f'\n\n:fire:  Let\'s beat the high score of {self._config.high_score}!  '
+                                        f':muscle:\n')
+
+                emb.add_field(name='NEXT number', value=f'{self._config.current_count + 1}', inline=True)
+
+                if self._config.current_member_id:
+
+                    member: Optional[discord.Member] = channel.guild.get_member(self._config.current_member_id)
+                    if member:  # It is possible that the member has left the server, so check if member exists
+                        emb.add_field(name='Last input by', value=f'{member.mention}', inline=True)
+
+                    else:  # Member has left the server.
+                        self._config.current_member_id = None
+                        emb.add_field(name='Last input by', value=f'An ex-member', inline=True)
+                        busy_work_necessary = True
+
+                await channel.send(embed=emb)
+
+            else:  # Counting channel doesn't exist.
+                self._config.channel_id = None
+                busy_work_necessary = True
 
         self.set_roles()
+
+        if busy_work_necessary:
+            await self.do_busy_work()
 
     def set_roles(self):
         """
@@ -247,12 +272,16 @@ class Bot(commands.Bot):
         if not all(c in POSSIBLE_CHARACTERS for c in content) or not any(char.isdigit() for char in content):
             return
 
+        zero_division: bool = False
+
         try:
             number: int = round(eval(content))
         except SyntaxError:
+            await message.add_reaction('⚠️')
+            await message.channel.send(f'Syntax error in mathematical expression!\nThe chain has **not** been broken.')
             return
         except ZeroDivisionError:
-            return
+            zero_division = True
 
         self._busy += 1
 
@@ -273,6 +302,25 @@ class Bot(commands.Bot):
         else:
             highest_valid_count = stats[0]
 
+        # -------------
+        # Wrong member
+        # -------------
+        if zero_division or (self._config.current_count and self._config.current_member_id == message.author.id):
+
+            if self.failed_role:
+                self._config.failed_member_id = message.author.id  # Designate current user as failed member
+                # Adding/removing failed role is done when not busy
+
+            await self.handle_wrong_member(message)
+
+            c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
+                      (message.author.id,))
+            conn.commit()
+            conn.close()
+
+            await self.schedule_busy_work()
+            return
+
         # --------------
         # Wrong number
         # --------------
@@ -287,26 +335,6 @@ class Bot(commands.Bot):
             c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
                       (message.author.id,))
 
-            conn.commit()
-            conn.close()
-
-            await self.schedule_busy_work()
-
-            return
-
-        # -------------
-        # Wrong member
-        # -------------
-        if self._config.current_count and self._config.current_member_id == message.author.id:
-
-            if self.failed_role:
-                self._config.failed_member_id = message.author.id  # Designate current user as failed member
-                # Adding/removing failed role is done when not busy
-
-            await self.handle_wrong_member(message)
-
-            c.execute('UPDATE members SET score = score - 1, wrong = wrong + 1 WHERE member_id = ?',
-                      (message.author.id,))
             conn.commit()
             conn.close()
 
@@ -418,7 +446,7 @@ bot = Bot()
 
 
 @bot.tree.command(name='sync', description='Syncs the slash commands to the bot')
-@app_commands.checks.has_permissions(administrator=True, ban_members=True)
+@app_commands.default_permissions(administrator=True, ban_members=True)
 async def sync(interaction: discord.Interaction):
     """Sync all the slash commands to the bot"""
     if not interaction.user.guild_permissions.ban_members:
@@ -431,37 +459,45 @@ async def sync(interaction: discord.Interaction):
 
 @bot.tree.command(name='set_channel', description='Sets the channel to count in')
 @app_commands.describe(channel='The channel to count in')
-@app_commands.checks.has_permissions(ban_members=True)
+@app_commands.default_permissions(ban_members=True)
 async def set_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     """Command to set the channel to count in"""
     if not interaction.user.guild_permissions.ban_members:
         await interaction.response.send_message('You do not have permission to do this!')
         return
+    await interaction.response.defer()
     config = Config.read()
     config.channel_id = channel.id
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
-    await interaction.response.send_message(f'Counting channel was set to {channel.mention}')
+    await interaction.followup.send(f'Counting channel was set to {channel.mention}')
 
 
-@bot.tree.command(name='listcmds', description='Lists commands')
-async def list_commands(interaction: discord.Interaction):
+@bot.tree.command(name='list_commands', description='Lists commands')
+@app_commands.describe(ephemeral='Whether the output should be ephemeral')
+async def list_commands(interaction: discord.Interaction, ephemeral: bool = True):
     """Command to list all the slash commands"""
     emb = discord.Embed(title='Slash Commands', color=discord.Color.blue(),
                         description='''
-**sync** - Syncs the slash commands to the bot (Admins only)
-**set_channel** - Sets the channel to count in (Admins only)
-**listcmds** - Lists all the slash commands
+**list_commands** - Lists all the slash commands
 **stats_user** - Shows the stats of a specific user
 **stats_server** - Shows the stats of the server
-**leaderboard** - Shows the leaderboard of the server
-**set_failed_role** - Sets the role to give when a user fails (Admins only)
-**set_reliable_role** - Sets the role to give when a user passes the score of 100 (Admins only)
-**remove_failed_role** - Removes the role to give when a user fails (Admins only)
-**remove_reliable_role** - Removes the role to give when a user passes the score of 100 (Admins only)
-**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing. (Admins only)
-**prune** - Remove data for users who are no longer in the server. (Admins only)''')
-    await interaction.response.send_message(embed=emb)
+**leaderboard** - Shows the leaderboard of the server''')
+
+    if interaction.user.guild_permissions.ban_members:
+        emb.description += '''\n
+__Restricted commands__ (Admin-only)
+**sync** - Syncs the slash commands to the bot
+**set_channel** - Sets the channel to count in
+**set_failed_role** - Sets the role to give when a user fails
+**set_reliable_role** - Sets the reliable role
+**remove_failed_role** - Unsets the role to give when a user fails
+**remove_reliable_role** - Unsets the reliable role
+**force_dump** - Forcibly dump bot config data. Use only when no one is actively playing.
+**prune** - Remove data for users who are no longer in the server.
+'''
+
+    await interaction.response.send_message(embed=emb, ephemeral=ephemeral)
 
 
 @bot.tree.command(name='stats_user', description='Shows the user stats')
@@ -503,28 +539,30 @@ async def stats_user(interaction: discord.Interaction, member: discord.Member = 
 @bot.tree.command(name="stats_server", description="View server counting stats")
 async def stats_server(interaction: discord.Interaction):
     """Command to show the stats of the server"""
+    await interaction.response.defer()
+
     # Use the bot's config variable, do not re-read file as it may not have been updated yet
     config: Config = bot._config
 
     if config.channel_id is None:  # channel not set yet
-        await interaction.response.send_message("Counting channel not set yet!")
+        await interaction.followup.send("Counting channel not set yet!")
         return
 
-    server_stats_embed = discord.Embed(
-        description=f'''**Current Count**: {config.current_count}
+    server_stats_embed = discord.Embed(description=f'''**Current Count**: {config.current_count}
 High Score: {config.high_score}
 {f"Last counted by: <@{config.current_member_id}>" if config.current_member_id else ""}''',
         color=discord.Color.blurple()
     )
     server_stats_embed.set_author(name=interaction.guild, icon_url=interaction.guild.icon)
 
-    await interaction.response.send_message(embed=server_stats_embed)
+    await interaction.followup.send(embed=server_stats_embed)
 
 
 @bot.tree.command(name='leaderboard', description='Shows the first 10 users with the highest score')
 async def leaderboard(interaction: discord.Interaction):
     """Command to show the top 10 users with the highest score in Indently"""
     await interaction.response.defer()
+
     emb = discord.Embed(title='Top 10 users in Indently',
                         color=discord.Color.blue(), description='')
 
@@ -547,12 +585,13 @@ async def leaderboard(interaction: discord.Interaction):
 @app_commands.default_permissions(ban_members=True)
 async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user fails to count"""
+    await interaction.response.defer()
     config = Config.read()
     config.failed_role_id = role.id
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message(f'Failed role was set to {role.mention}')
+    await interaction.followup.send(f'Failed role was set to {role.mention}.')
 
 
 @bot.tree.command(name='set_reliable_role',
@@ -561,17 +600,19 @@ async def set_failed_role(interaction: discord.Interaction, role: discord.Role):
 @app_commands.default_permissions(ban_members=True)
 async def set_reliable_role(interaction: discord.Interaction, role: discord.Role):
     """Command to set the role to be used when a user gets 100 of score"""
+    await interaction.response.defer()
     config = Config.read()
     config.reliable_counter_role_id = role.id
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message(f'Reliable role was set to {role.mention}')
+    await interaction.followup.send(f'Reliable role was set to {role.mention}.')
 
 
 @bot.tree.command(name='remove_failed_role', description='Removes the failed role feature')
 @app_commands.default_permissions(ban_members=True)
 async def remove_failed_role(interaction: discord.Interaction):
+    await interaction.response.defer()
     config = Config.read()
     config.failed_role_id = None
     config.failed_member_id = None
@@ -579,41 +620,44 @@ async def remove_failed_role(interaction: discord.Interaction):
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message('Failed role removed')
+    await interaction.followup.send('Failed role removed.')
 
 
 @bot.tree.command(name='remove_reliable_role', description='Removes the reliable role feature')
 @app_commands.default_permissions(ban_members=True)
 async def remove_reliable_role(interaction: discord.Interaction):
+    await interaction.response.defer()
     config = Config.read()
     config.reliable_counter_role_id = None
     config.dump_data()
     bot.read_config()  # Explicitly ask the bot to re-read the config
     bot.set_roles()  # Ask the bot to re-load the roles
-    await interaction.response.send_message('Reliable role removed')
+    await interaction.followup.send('Reliable role removed.')
 
 
 @bot.tree.command(name='disconnect', description='Makes the bot go offline')
 @app_commands.default_permissions(ban_members=True)
 async def disconnect(interaction: discord.Interaction):
-    config = Config.read()
-    if config.channel_id is not None:
-        channel = bot.get_channel(config.channel_id)
-        await channel.send('Bot is now offline.')
+    emb: discord.Embed = discord.Embed(description=':octagonal_sign:  The bot is going offline  :octagonal_sign:',
+                                       colour=discord.Colour.brand_red())
+    await interaction.response.send_message(embed=emb)
     await bot.close()
 
 
 @bot.tree.command(name='force_dump', description='Forcibly dumps configuration data')
 @app_commands.default_permissions(ban_members=True)
 async def force_dump(interaction: discord.Interaction):
+    await interaction.response.defer()
     bot._busy = 0
     await bot.do_busy_work()
-    await interaction.response.send_message('Configuration data successfully dumped.')
+    emb = discord.Embed(description=f'✅ Configuration data successfully dumped.', colour=discord.Colour.og_blurple())
+    await interaction.followup.send(embed=emb)
 
 
 @bot.tree.command(name='prune', description='(DANGER) Deletes data of users who are no longer in the server')
 @app_commands.default_permissions(ban_members=True)
 async def prune(interaction: discord.Interaction):
+    await interaction.response.defer()
 
     conn: sqlite3.Connection = sqlite3.connect('database.sqlite3')
     cursor: sqlite3.Cursor = conn.cursor()
@@ -634,15 +678,44 @@ async def prune(interaction: discord.Interaction):
 
         if count > 0:
             conn.commit()
-            await interaction.response.send_message(f'Successfully removed data for {count} user(s).')
+            await interaction.followup.send(f'Successfully removed data for {count} user(s).')
         else:
-            await interaction.response.send_message('No users met the criteria to be removed.')
+            await interaction.followup.send('No users met the criteria to be removed.')
 
     else:
-        await interaction.response.send_message('No users found in the database.')
+        await interaction.followup.send('No users found in the database.')
 
     conn.close()
 
+
+@bot.tree.command(name='calc', description='Evaluate a mathematical expression')
+@app_commands.describe(expression='The mathematical expression to be evaluated')
+async def calc(interaction: discord.Interaction, expression: str) -> None:
+    await interaction.response.defer()
+
+    emb: discord.Embed = discord.Embed(description='')
+
+    if not all(c in POSSIBLE_CHARACTERS for c in expression) or not any(char.isdigit() for char in expression):
+        emb.description = f'**Expression:** `{expression}`\n\n❌ Invalid mathematical expression!'
+        emb.colour = discord.Colour.brand_red()
+        await interaction.followup.send(embed=emb)
+        return
+
+    try:
+        number: int = round(eval(expression))
+        emb.description = f'**Expression:** `{expression}`\n\n**Result:** `{number}`'
+        emb.colour = discord.Colour.brand_green()
+        await interaction.followup.send(embed=emb)
+    except SyntaxError:
+        emb.description = f'**Expression:** `{expression}`\n\n❌ Invalid mathematical expression!'
+        emb.colour = discord.Colour.brand_red()
+        await interaction.followup.send(embed=emb)
+        return
+    except ZeroDivisionError:
+        emb.description = f'**Expression:** `{expression}`\n\n❌ Division by zero!'
+        emb.colour = discord.Colour.brand_red()
+        await interaction.followup.send(embed=emb)
+        return
 
 if __name__ == '__main__':
     bot.run(TOKEN)
