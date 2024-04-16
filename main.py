@@ -393,43 +393,64 @@ Restart from **1** and try to beat the current high score of **{self._config.hig
 
         if not self.is_ready():
             return
-
         if message.author == self.user:
             return
-
-        # Check if the message is in the channel
         if message.channel.id != self._config.channel_id:
             return
-        if not message.reactions:
-            return
+
+        # Check if the deleted message was a legal message
         if not all(c in POSSIBLE_CHARACTERS for c in message.content):
-            return
+            # The deleted message was not a legal message.
+            # But, it is possible that this message was edited prior to deletion,
+            # and the original message could have been a legal number.
+            # If so, the bot would have reacted to it in some way (tick or cross, we don't care).
+            # So we iterate through the reactions and check if any of those had been
+            # added by this bot.
+            dont_return: bool = False
+            if message.reactions:
+                for reaction in message.reactions:
+                    if reaction.me:
+                        # We found a reaction that was posted by this bot.
+                        # => this message was a legal message in the past.
+                        # Therefore, we need to show a deletion alert.
+                        dont_return = True
+                        break
+            if not dont_return:
+                # No reactions were found under the message that were posted
+                # by this bot. So we can safely ignore the message.
+                return
 
         await message.channel.send(
-            f'{message.author.mention} deleted their number! '
-            f'The **next** number is **{self._config.current_count + 1}**.')
+            f'{message.author.mention} deleted their number!\n'
+            f'Please note that deleting numbers is **prohibited**, even if it has messed up the count. Repeated '
+            f'violation of this policy will force the Mods to revoke your access the counting channel permanently.\n\n'
+            f'The **NEXT** number is **{self._config.current_count + 1}**.')
 
     async def on_message_edit(self, before: discord.Message, after: discord.Message) -> None:
         """Send a message in the channel if a user modifies their input."""
 
         if not self.is_ready():
             return
-
         if before.author == self.user:
             return
-
-        # Check if the message is in the channel
         if before.channel.id != self._config.channel_id:
             return
-        if not before.reactions:
+
+        # Check whether the original message or the edited message are
+        # legal messages. If either of those is a legal message,
+        # we need to show an alert. No need to check for reactions.
+        if not (all(c in POSSIBLE_CHARACTERS for c in before.content)
+                or all(c in POSSIBLE_CHARACTERS for c in after.content)):
             return
-        if not all(c in POSSIBLE_CHARACTERS for c in before.content):
-            return
+
         if before.content == after.content:
             return
 
         await after.channel.send(
-            f'{after.author.mention} edited their number! The **next** number is **{self._config.current_count + 1}**.')
+            f'{after.author.mention} edited their number! {before.jump_url}\n'
+            f'Please note that editing numbers is **prohibited**, even if it has messed up the count. Repeated '
+            f'violation of this policy will force the Mods to revoke your access the counting channel permanently.\n\n'
+            f'The **NEXT** number is **{self._config.current_count + 1}**.')
 
     async def setup_hook(self) -> None:
         await self.tree.sync()
