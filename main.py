@@ -118,18 +118,43 @@ class Bot(commands.Bot):
         """Override the on_ready method"""
         print(f'Bot is ready as {self.user.name}#{self.user.discriminator}')
 
-        if self._config.channel_id is not None:
-            channel = bot.get_channel(self._config.channel_id)
+        busy_work_necessary: bool = False
 
-            if self._config.current_member_id is not None:
-                member = await channel.guild.fetch_member(self._config.current_member_id)
-                await channel.send(
-                    f'I\'m now online! Last counted by {member.mention}. The **next** number is '
-                    f'**{self._config.current_count + 1}**.')
-            else:
-                await channel.send(f'I\'m now online!')
+        if self._config.channel_id:
+
+            channel: Optional[discord.TextChannel] = bot.get_channel(self._config.channel_id)
+            if channel:  # It is possible that the channel was removed, so check if channel exists
+
+                emb: discord.Embed = discord.Embed(description=':green_circle:  **I\'m now online!**',
+                                                   colour=discord.Color.brand_green())
+
+                if self._config.high_score > 0:
+                    emb.description += (f'\n\n:fire:  Let\'s beat the high score of {self._config.high_score}!  '
+                                        f':muscle:\n')
+
+                emb.add_field(name='NEXT number', value=f'{self._config.current_count + 1}', inline=True)
+
+                if self._config.current_member_id:
+
+                    member: Optional[discord.Member] = channel.guild.get_member(self._config.current_member_id)
+                    if member:  # It is possible that the member has left the server, so check if member exists
+                        emb.add_field(name='Last input by', value=f'{member.mention}', inline=True)
+
+                    else:  # Member has left the server.
+                        self._config.current_member_id = None
+                        emb.add_field(name='Last input by', value=f'An ex-member', inline=True)
+                        busy_work_necessary = True
+
+                await channel.send(embed=emb)
+
+            else:  # Counting channel doesn't exist.
+                self._config.channel_id = None
+                busy_work_necessary = True
 
         self.set_roles()
+
+        if busy_work_necessary:
+            await self.do_busy_work()
 
     def set_roles(self):
         """
@@ -606,10 +631,9 @@ async def remove_reliable_role(interaction: discord.Interaction):
 @bot.tree.command(name='disconnect', description='Makes the bot go offline')
 @app_commands.default_permissions(ban_members=True)
 async def disconnect(interaction: discord.Interaction):
-    config = Config.read()
-    if config.channel_id is not None:
-        channel = bot.get_channel(config.channel_id)
-        await channel.send('Bot is now offline.')
+    emb: discord.Embed = discord.Embed(description=':octagonal_sign:  The bot is going offline  :octagonal_sign:',
+                                       colour=discord.Colour.brand_red())
+    await interaction.response.send_message(embed=emb)
     await bot.close()
 
 
