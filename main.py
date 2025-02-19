@@ -132,7 +132,7 @@ class Bot(commands.Bot):
                     emb.description += (f'\n\n:fire:  Let\'s beat the high score of {self._config.high_score}!  '
                                         f':muscle:\n')
 
-                emb.add_field(name='NEXT number', value=f'{self._config.current_count + 1}', inline=True)
+                emb.add_field(name='CURRENT number', value=f'{self._config.current_count}', inline=True)
 
                 if self._config.current_member_id:
 
