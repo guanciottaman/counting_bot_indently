@@ -8,7 +8,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.12"
-"discord.py" = "^2.3.2"
+"discord.py" = "^2.7.1"
 python-dotenv = "^1.0.1"
 
 
